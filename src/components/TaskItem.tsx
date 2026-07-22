@@ -1,6 +1,6 @@
-import { Bell, Calendar, Check, ChevronDown, ChevronRight, GripVertical, ListTree, Repeat2, Star, Trash2 } from 'lucide-react'
+import { Bell, Calendar, CalendarDays, Check, ChevronDown, ChevronRight, GripVertical, ListTree, Repeat2, Star, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { completedSubtasks, formatDue, isOverdue } from '../format'
+import { completedSubtasks, formatDayKey, formatDue, isOverdue, todayKey } from '../format'
 import type { Task } from '../types'
 
 export type DropEdge = 'before' | 'after'
@@ -156,11 +156,18 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
               }}
             />
           ) : (
-            <span className="task-title" onDoubleClick={beginTitleEdit} title={onRename ? 'Double-click to edit' : undefined}>{task.title}</span>
+            <span className="task-title" onClick={beginTitleEdit} title={onRename ? 'Click to edit' : undefined}>{task.title}</span>
           )}
           {!compact && task.notes && <span className="task-notes">{task.notes}</span>}
           <span className="task-meta">
             {task.dueAt && <span className={isOverdue(task) ? 'overdue' : ''}><Calendar size={12} />{formatDue(task.dueAt)}</span>}
+            {!task.completed && task.focusDates.length > 0 && (
+              <span title={task.focusDates.length === 1 ? 'Focus day' : `${task.focusDates.length} focus days`}>
+                <CalendarDays size={12} />
+                {formatDayKey(task.focusDates.find((day) => day >= todayKey()) ?? task.focusDates[task.focusDates.length - 1])}
+                {task.focusDates.length > 1 && ` +${task.focusDates.length - 1}`}
+              </span>
+            )}
             {task.reminderAt && <span title="Reminder set"><Bell size={12} /></span>}
             {task.recurrence !== 'none' && <span title={`Repeats ${task.recurrence}`}><Repeat2 size={12} />{task.recurrence}</span>}
             {subtaskCount > 0 && (

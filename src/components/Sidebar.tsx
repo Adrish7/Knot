@@ -1,5 +1,6 @@
-import { CheckCircle2, ChevronLeft, Ellipsis, Inbox, ListChecks, Menu, Plus, Power, RefreshCw, Sun, Star, Trash2 } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, Ellipsis, Inbox, ListChecks, Menu, Plus, Power, RefreshCw, Sun, Star, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { todayKey } from '../format'
 import type { Task, TaskList, ViewId } from '../types'
 
 interface SidebarProps {
@@ -25,7 +26,8 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
   const [draftListName, setDraftListName] = useState('')
   const openCount = tasks.filter((task) => !task.completed).length
   const today = new Date().toDateString()
-  const todayCount = tasks.filter((task) => !task.completed && task.dueAt && new Date(task.dueAt).toDateString() === today).length
+  const focusToday = todayKey()
+  const todayCount = tasks.filter((task) => !task.completed && ((task.dueAt && new Date(task.dueAt).toDateString() === today) || task.focusDates.includes(focusToday))).length
   const starredCount = tasks.filter((task) => !task.completed && task.starred).length
 
   return (
@@ -46,6 +48,7 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
       <nav className="primary-nav" aria-label="Task views">
         <SidebarLink collapsed={collapsed} active={selectedView === 'all'} icon={<Inbox />} label="All tasks" count={openCount} onClick={() => onSelect('all')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'today'} icon={<Sun />} label="Today" count={todayCount} onClick={() => onSelect('today')} />
+        <SidebarLink collapsed={collapsed} active={selectedView === 'calendar'} icon={<CalendarDays />} label="Calendar" count={0} onClick={() => onSelect('calendar')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'starred'} icon={<Star />} label="Starred" count={starredCount} onClick={() => onSelect('starred')} />
       </nav>
 

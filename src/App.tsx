@@ -1,6 +1,7 @@
 import { CheckCircle2, FolderOpen, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Board } from './components/Board'
+import { CalendarPage } from './components/CalendarPage'
 import { Completed } from './components/Completed'
 import { Header } from './components/Header'
 import { ConfirmModal, CreateListModal, RenameListModal } from './components/Modal'
@@ -8,7 +9,7 @@ import { Sidebar } from './components/Sidebar'
 import { TaskPanel } from './components/TaskPanel'
 import { Trash } from './components/Trash'
 import { createSeedData, createTask, nextOccurrence, normalizeData, palette, uid } from './data'
-import { isToday } from './format'
+import { isToday, todayKey } from './format'
 import type { DeletedTask, KnotData, Task, TaskList, ThemeMode, ViewId } from './types'
 
 const STORAGE_KEY = 'knot.desktop.data'
@@ -135,13 +136,14 @@ function App() {
     let tasks = data.tasks
     if (needle) return tasks.filter((task) => `${task.title} ${task.notes} ${task.subtasks.map((item) => item.title).join(' ')}`.toLowerCase().includes(needle))
     tasks = tasks.filter((task) => !task.completed)
-    if (selectedView === 'today') tasks = tasks.filter((task) => isToday(task.dueAt))
+    if (selectedView === 'today') tasks = tasks.filter((task) => isToday(task.dueAt) || task.focusDates.includes(todayKey()))
     else if (selectedView === 'starred') tasks = tasks.filter((task) => task.starred)
     else if (selectedView.startsWith('list:')) tasks = tasks.filter((task) => task.listId === selectedView.slice(5))
     return tasks
   }, [clockTick, data.tasks, query, selectedView])
 
   const completedTasks = useMemo(() => data.tasks.filter((task) => task.completed), [data.tasks])
+  const unplannedCount = useMemo(() => data.tasks.filter((task) => !task.completed && task.focusDates.length === 0).length, [data.tasks])
   const searching = Boolean(query.trim())
   const activeListId = selectedView.startsWith('list:') ? selectedView.slice(5) : null
   const activeList = sortedLists.find((list) => list.id === activeListId)
@@ -157,6 +159,8 @@ function App() {
       ? { title: 'All tasks', eyebrow: greeting(), mode: 'board' as const }
       : selectedView === 'today'
         ? { title: 'Today', eyebrow: new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date()), mode: 'smart' as const }
+        : selectedView === 'calendar'
+        ? { title: 'Calendar', eyebrow: unplannedCount === 0 ? 'Every task has a focus day' : `${unplannedCount} unplanned ${unplannedCount === 1 ? 'task' : 'tasks'}`, mode: 'smart' as const }
         : selectedView === 'starred'
           ? { title: 'Starred', eyebrow: openCountLabel, mode: 'smart' as const }
           : { title: activeList?.name ?? 'List', eyebrow: openCountLabel, mode: 'list' as const }
@@ -183,6 +187,26 @@ function App() {
   }
 
   const updateTask = (taskId: string, patch: Partial<Task>) => setData((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === taskId ? { ...task, ...patch } : task) }))
+
+  const patchFocusDates = (taskId: string, patch: (dates: string[]) => string[]) => {
+    setData((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === taskId ? { ...task, focusDates: [...new Set(patch(task.focusDates))].sort() } : task) }))
+  }
+
+  const addFocusDate = (taskId: string, day: string) => patchFocusDates(taskId, (dates) => [...dates, day])
+  const removeFocusDate = (taskId: string, day: string) => patchFocusDates(taskId, (dates) => dates.filter((item) => item !== day))
+  const moveFocusDate = (taskId: string, fromDay: string, toDay: string) => patchFocusDates(taskId, (dates) => [...dates.filter((item) => item !== fromDay), toDay])
+
+  const addTaskOnDay = (day: string, title: string) => {
+    const listId = sortedLists[0]?.id
+    if (!listId) {
+      setCreateListOpen(true)
+      return
+    }
+    const order = data.tasks.filter((task) => task.listId === listId).length
+    const task = { ...createTask(listId, title, order), focusDates: [day] }
+    setData((current) => ({ ...current, tasks: [...current.tasks, task] }))
+    showToast('Task added')
+  }
 
   const renameListById = (listId: string, name: string) => {
     const trimmed = name.trim()
@@ -225,7 +249,7 @@ function App() {
         const nextReminder = source.reminderAt ? nextOccurrence(source.reminderAt, source.recurrence) : null
         const alreadyCreated = tasks.some((task) => task.id !== source.id && !task.completed && task.listId === source.listId && task.dueAt === nextDue && task.title === source.title && task.recurrence === source.recurrence)
         if (!alreadyCreated) {
-          const next: Task = { ...source, id: uid('task'), dueAt: nextDue, reminderAt: nextReminder, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: tasks.filter((task) => task.listId === source.listId).length, subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })) }
+          const next: Task = { ...source, id: uid('task'), dueAt: nextDue, focusDates: [], reminderAt: nextReminder, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: tasks.filter((task) => task.listId === source.listId).length, subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })) }
           tasks.push(next)
         }
       }
@@ -384,7 +408,11 @@ function App() {
   if (!hydrated) return <div className="splash"><img src="./icon.png" alt="Knot" /><span>Loading…</span></div>
 
   return (
-    <div className={`app-shell ${data.preferences.sidebarCollapsed ? 'sidebar-collapsed' : ''}`} onMouseDown={() => listMenu && setListMenu(null)}>
+    <div
+      className={`app-shell ${data.preferences.sidebarCollapsed ? 'sidebar-collapsed' : ''} ${activeList ? 'is-accented' : ''}`}
+      style={activeList ? { '--list-accent': activeList.color } as React.CSSProperties : undefined}
+      onMouseDown={() => listMenu && setListMenu(null)}
+    >
       <Sidebar
         collapsed={data.preferences.sidebarCollapsed}
         lists={sortedLists}
@@ -405,7 +433,17 @@ function App() {
       <section className="workspace">
         <Header title={page.title} eyebrow={page.eyebrow} query={query} sortMode={data.preferences.sortMode} theme={data.preferences.theme} onQuery={(value) => { setQuery(value); if (value.trim() && (selectedView === 'trash' || selectedView === 'completed')) setSelectedView('all') }} onSort={(sortMode) => updatePreferences({ sortMode })} onTheme={cycleTheme} onRenameTitle={!searching && activeList ? (name) => renameListById(activeList.id, name) : undefined} searchRef={searchRef} />
         {selectedView === 'completed' ? <Completed tasks={completedTasks} lists={sortedLists} onOpen={setSelectedTaskId} onReopen={(taskId) => completeTask(taskId, false)} onDelete={deleteTask} onClear={clearCompleted} />
-          : selectedView === 'trash' ? <Trash entries={data.trash} onRestore={restoreTask} onPurge={purgeTask} onEmpty={emptyTrash} /> : <Board
+          : selectedView === 'trash' ? <Trash entries={data.trash} onRestore={restoreTask} onPurge={purgeTask} onEmpty={emptyTrash} />
+          : selectedView === 'calendar' && !searching ? <CalendarPage
+            tasks={data.tasks}
+            lists={sortedLists}
+            onOpenTask={setSelectedTaskId}
+            onAddFocusDate={addFocusDate}
+            onMoveFocusDate={moveFocusDate}
+            onRemoveFocusDate={removeFocusDate}
+            onAddTaskOnDay={addTaskOnDay}
+            onAddTask={(title) => { const listId = sortedLists[0]?.id; if (listId) addTask(listId, title); else setCreateListOpen(true) }}
+          /> : <Board
           mode={page.mode}
           lists={sortedLists}
           tasks={displayedTasks}
@@ -446,7 +484,7 @@ function App() {
       )}
 
       {toast && <div className="toast"><CheckCircle2 size={16} />{toast}</div>}
-      {selectedView !== 'trash' && selectedView !== 'completed' && <button className="floating-add" onClick={() => { const listId = activeListId ?? sortedLists[0]?.id; if (listId) setQuickAddListId(listId); else setCreateListOpen(true) }}><Plus size={20} /><span>New task</span><kbd>⌘N</kbd></button>}
+      {selectedView !== 'trash' && selectedView !== 'completed' && selectedView !== 'calendar' && <button className="floating-add" onClick={() => { const listId = activeListId ?? sortedLists[0]?.id; if (listId) setQuickAddListId(listId); else setCreateListOpen(true) }}><Plus size={20} /><span>New task</span><kbd>⌘N</kbd></button>}
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { dateKey } from './format'
 import type { DeletedTask, KnotData, Preferences, Recurrence, Subtask, Task, TaskList } from './types'
 
 export const TRASH_RETENTION_DAYS = 30
@@ -27,6 +28,12 @@ function isoDate(daysFromNow: number, hour = 17, minute = 0) {
   return date.toISOString()
 }
 
+function dayKey(daysFromNow: number) {
+  const date = new Date()
+  date.setDate(date.getDate() + daysFromNow)
+  return dateKey(date)
+}
+
 export function createTask(listId: string, title: string, sortOrder: number): Task {
   return {
     id: uid('task'),
@@ -34,6 +41,7 @@ export function createTask(listId: string, title: string, sortOrder: number): Ta
     title: title.trim(),
     notes: '',
     dueAt: null,
+    focusDates: [],
     reminderAt: null,
     recurrence: 'none',
     starred: false,
@@ -66,13 +74,14 @@ export function createSeedData(): KnotData {
       make(focusId, 'Shape the week', 0, {
         notes: 'Choose the three outcomes that would make this week feel complete.',
         dueAt: isoDate(0, 18),
+        focusDates: [dayKey(0)],
         starred: true,
         subtasks: [
           { id: uid('subtask'), title: 'Review calendar', completed: true },
           { id: uid('subtask'), title: 'Choose top three outcomes', completed: false },
         ],
       }),
-      make(focusId, 'Send the project update', 1, { dueAt: isoDate(1, 16, 30) }),
+      make(focusId, 'Send the project update', 1, { dueAt: isoDate(1, 16, 30), focusDates: [dayKey(0), dayKey(1)] }),
       make(focusId, 'Friday weekly review', 2, { dueAt: isoDate(3, 17), recurrence: 'weekly' as Recurrence }),
       make(personalId, 'Book a table for Saturday', 0, { dueAt: isoDate(2, 19) }),
       make(personalId, 'Water the plants', 1, { recurrence: 'weekly' as Recurrence }),
@@ -163,6 +172,7 @@ function normalizeTask(candidate: Record<string, unknown>, listId: string, index
     title: cleanText(candidate.title) || 'Untitled task',
     notes: typeof candidate.notes === 'string' ? candidate.notes : '',
     dueAt: nullableIso(candidate.dueAt),
+    focusDates: normalizeFocusDates(candidate.focusDates),
     reminderAt: nullableIso(candidate.reminderAt),
     recurrence,
     starred: Boolean(candidate.starred),
@@ -172,6 +182,14 @@ function normalizeTask(candidate: Record<string, unknown>, listId: string, index
     sortOrder: finiteNumber(candidate.sortOrder, index),
     subtasks: normalizeSubtasks(candidate.subtasks),
   }
+}
+
+const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+function normalizeFocusDates(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const keys = value.filter((item): item is string => typeof item === 'string' && DAY_KEY_PATTERN.test(item))
+  return [...new Set(keys)].sort()
 }
 
 function normalizeSubtasks(value: unknown): Subtask[] {

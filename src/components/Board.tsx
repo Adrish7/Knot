@@ -86,7 +86,7 @@ export function Board(props: BoardProps) {
           {lists.map((list) => {
             const open = grouped.get(list.id) ?? []
             return (
-              <section className={`list-card ${draggedTask ? 'is-drop-target' : ''}`} key={list.id} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropInto(event, list.id)}>
+              <section className={`list-card is-accented ${draggedTask ? 'is-drop-target' : ''}`} key={list.id} style={{ '--list-accent': list.color } as React.CSSProperties} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropInto(event, list.id)}>
                 <header className="list-card-header">
                   <div><span className="color-orb" style={{ background: list.color, color: list.color }} /><EditableListName list={list} onRename={props.onRenameList} /><span className="card-count">{open.length}</span></div>
                   <button className="icon-button small" aria-label={`Options for ${list.name}`} aria-haspopup="menu" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); props.onListMenu(list, event.currentTarget) }}><MoreHorizontal size={16} /></button>
@@ -115,7 +115,7 @@ export function Board(props: BoardProps) {
     <main className="content-area focus-scroll">
       <section className="focus-sheet">
         <div className="focus-summary">
-          <div className="summary-mark" style={{ '--summary-color': activeList?.color ?? '#778b72' } as React.CSSProperties}><Inbox size={22} /></div>
+          <div className="summary-mark"><Inbox size={22} /></div>
           <div>
             <span>{open.length === 0 ? 'All done' : `${open.length} open ${open.length === 1 ? 'task' : 'tasks'}`}</span>
           </div>

@@ -4,6 +4,29 @@ const day = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short
 const dayWithYear = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
 
+export function dateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+export function todayKey() {
+  return dateKey(new Date())
+}
+
+export function parseDateKey(key: string) {
+  const [year, month, dayOfMonth] = key.split('-').map(Number)
+  return new Date(year, month - 1, dayOfMonth)
+}
+
+export function formatDayKey(key: string) {
+  const value = parseDateKey(key)
+  const now = new Date()
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  if (value.toDateString() === now.toDateString()) return 'Today'
+  if (value.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
+  return (value.getFullYear() === now.getFullYear() ? day : dayWithYear).format(value)
+}
+
 export function isToday(iso: string | null) {
   if (!iso) return false
   const value = new Date(iso)

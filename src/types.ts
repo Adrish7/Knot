@@ -1,7 +1,7 @@
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type Recurrence = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly'
 export type SortMode = 'manual' | 'date' | 'starred'
-export type ViewId = 'all' | 'today' | 'starred' | 'completed' | 'trash' | `list:${string}`
+export type ViewId = 'all' | 'today' | 'calendar' | 'starred' | 'completed' | 'trash' | `list:${string}`
 
 export interface TaskList {
   id: string
@@ -23,6 +23,7 @@ export interface Task {
   title: string
   notes: string
   dueAt: string | null
+  focusDates: string[] // local day keys, 'YYYY-MM-DD'
   reminderAt: string | null
   recurrence: Recurrence
   starred: boolean

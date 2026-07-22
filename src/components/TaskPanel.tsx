@@ -1,7 +1,8 @@
-import { Bell, CalendarClock, Check, ChevronDown, Clock3, ListChecks, Plus, Repeat2, Star, Trash2, X } from 'lucide-react'
+import { Bell, CalendarClock, CalendarDays, Check, ChevronDown, Clock3, ListChecks, Plus, Repeat2, Star, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { uid } from '../data'
-import { DateTimePicker } from './DateTimePicker'
+import { formatDayKey } from '../format'
+import { DateTimePicker, FocusDayPicker } from './DateTimePicker'
 import type { Recurrence, Task, TaskList } from '../types'
 
 interface TaskPanelProps {
@@ -46,6 +47,20 @@ export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onClose
             <span><CalendarClock size={16} />Due</span>
             <DateTimePicker value={task.dueAt} placeholder="Add a date" onChange={(dueAt) => onUpdate({ dueAt })} />
           </div>
+          <div className="detail-row">
+            <span><CalendarDays size={16} />Focus days</span>
+            <FocusDayPicker dates={task.focusDates} onChange={(focusDates) => onUpdate({ focusDates })} />
+          </div>
+          {task.focusDates.length > 0 && (
+            <div className="focus-day-chips">
+              {task.focusDates.map((day) => (
+                <span className="focus-day-chip" key={day}>
+                  {formatDayKey(day)}
+                  <button onClick={() => onUpdate({ focusDates: task.focusDates.filter((item) => item !== day) })} aria-label={`Remove focus day ${formatDayKey(day)}`}><X size={11} /></button>
+                </span>
+              ))}
+            </div>
+          )}
           <div className="detail-row">
             <span><Bell size={16} />Remind me</span>
             <DateTimePicker value={task.reminderAt} placeholder="Add a reminder" onChange={(reminderAt) => onUpdate({ reminderAt })} />
