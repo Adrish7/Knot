@@ -1,6 +1,7 @@
 import { Bell, Calendar, CalendarDays, Check, ChevronDown, ChevronRight, GripVertical, ListTree, Repeat2, Star, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { completedSubtasks, formatDayKey, formatDue, isOverdue, todayKey } from '../format'
+import { DateTimePicker } from './DateTimePicker'
 import type { Task } from '../types'
 
 export type DropEdge = 'before' | 'after'
@@ -14,54 +15,29 @@ interface TaskItemProps {
   onToggleSubtask: (taskId: string, subtaskId: string) => void
   onStar: (taskId: string) => void
   onDelete: (taskId: string) => void
+  onSetDue?: (taskId: string, dueAt: string | null) => void
   onRename?: (taskId: string, title: string) => void
   onDragStart?: (event: React.DragEvent, taskId: string) => void
   onDragEnd?: () => void
-  dragActive?: boolean
-  canDrop?: boolean
-  onDropAt?: (event: React.DragEvent, taskId: string, edge: DropEdge) => void
+  dropEdge?: DropEdge | null
 }
 
-export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggleSubtask, onStar, onDelete, onRename, onDragStart, onDragEnd, dragActive, canDrop, onDropAt }: TaskItemProps) {
+export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggleSubtask, onStar, onDelete, onSetDue, onRename, onDragStart, onDragEnd, dropEdge }: TaskItemProps) {
   const subtaskCount = task.subtasks.length
-  const [dropEdge, setDropEdge] = useState<DropEdge | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
   const [draftTitle, setDraftTitle] = useState(task.title)
   const [dragging, setDragging] = useState(false)
+  const [suppressDrag, setSuppressDrag] = useState(false)
   const [subtasksOpen, setSubtasksOpen] = useState(true)
-  const openTimer = useRef<number | null>(null)
 
   useEffect(() => {
     if (!editingTitle) setDraftTitle(task.title)
   }, [editingTitle, task.title])
 
-  useEffect(() => () => {
-    if (openTimer.current !== null) window.clearTimeout(openTimer.current)
-  }, [])
-
-  const cancelOpen = () => {
-    if (openTimer.current !== null) window.clearTimeout(openTimer.current)
-    openTimer.current = null
-  }
-
-  const scheduleOpen = (event: React.MouseEvent) => {
-    if (editingTitle) return
-    if (event.detail > 1) {
-      cancelOpen()
-      return
-    }
-    cancelOpen()
-    openTimer.current = window.setTimeout(() => {
-      onOpen(task.id)
-      openTimer.current = null
-    }, 320)
-  }
-
   const beginTitleEdit = (event: React.MouseEvent) => {
     if (!onRename) return
     event.preventDefault()
     event.stopPropagation()
-    cancelOpen()
     setDraftTitle(task.title)
     setEditingTitle(true)
   }
@@ -73,43 +49,29 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
     if (title && title !== task.title) onRename?.(task.id, title)
   }
 
-  const draggable = Boolean(onDragStart) && !task.completed && !editingTitle
+  const draggable = Boolean(onDragStart) && !task.completed && !editingTitle && !suppressDrag
 
   return (
     <article
       className={`task-item ${task.completed ? 'is-completed' : ''} ${compact ? 'is-compact' : ''} ${draggable ? 'is-draggable' : ''} ${dragging ? 'is-dragging' : ''} ${dropEdge ? `drop-${dropEdge}` : ''}`}
+      data-task-id={task.id}
       draggable={draggable}
+      onMouseDownCapture={(event) => {
+        // A press on a control must never start a row drag: the drag would swallow the click.
+        setSuppressDrag(event.target instanceof Element && Boolean(event.target.closest('button, input, textarea, select')))
+      }}
+      onClick={(event) => {
+        if (editingTitle || dragging) return
+        if (event.target instanceof Element && event.target.closest('button, input, textarea, select')) return
+        onOpen(task.id)
+      }}
       onDragStart={(event) => {
         setDragging(true)
         onDragStart?.(event, task.id)
       }}
       onDragEnd={() => {
         setDragging(false)
-        setDropEdge(null)
         onDragEnd?.()
-      }}
-      onDragOver={(event) => {
-        if (!dragActive || !onDropAt) return
-        event.preventDefault()
-        event.stopPropagation()
-        if (!canDrop) return
-        event.dataTransfer.dropEffect = 'move'
-        const bounds = event.currentTarget.getBoundingClientRect()
-        setDropEdge(event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after')
-      }}
-      onDragLeave={(event) => {
-        const nextTarget = event.relatedTarget
-        if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) setDropEdge(null)
-      }}
-      onDrop={(event) => {
-        if (!dragActive || !onDropAt) return
-        event.preventDefault()
-        event.stopPropagation()
-        if (!canDrop) return
-        const bounds = event.currentTarget.getBoundingClientRect()
-        const edge = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after'
-        onDropAt(event, task.id, edge)
-        setDropEdge(null)
       }}
     >
       <GripVertical size={14} className="drag-handle" />
@@ -121,7 +83,6 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
           className="task-body"
           role="button"
           tabIndex={0}
-          onClick={scheduleOpen}
           onKeyDown={(event) => {
             if (event.target !== event.currentTarget) return
             if (event.key === 'Enter' || event.key === ' ') {
@@ -156,7 +117,7 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
               }}
             />
           ) : (
-            <span className="task-title" onClick={beginTitleEdit} title={onRename ? 'Click to edit' : undefined}>{task.title}</span>
+            <span className="task-title" onDoubleClick={beginTitleEdit} title={onRename ? 'Double-click to edit' : undefined}>{task.title}</span>
           )}
           {!compact && task.notes && <span className="task-notes">{task.notes}</span>}
           <span className="task-meta">
@@ -176,7 +137,7 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
                 aria-expanded={subtasksOpen}
                 aria-label={`${subtasksOpen ? 'Hide' : 'Show'} subtasks for ${task.title}`}
                 title={subtasksOpen ? 'Hide subtasks' : 'Show subtasks'}
-                onClick={(event) => { event.stopPropagation(); cancelOpen(); setSubtasksOpen((open) => !open) }}
+                onClick={(event) => { event.stopPropagation(); setSubtasksOpen((open) => !open) }}
               >
                 <ListTree size={12} />{completedSubtasks(task)}/{subtaskCount}
                 {subtasksOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
@@ -201,13 +162,18 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
           </div>
         )}
       </div>
+      {onSetDue && !task.completed && (
+        <span className="task-date-field">
+          <DateTimePicker iconTrigger value={task.dueAt} placeholder="Add a date" onChange={(dueAt) => onSetDue(task.id, dueAt)} />
+        </span>
+      )}
       <button className={`star-button ${task.starred ? 'is-starred' : ''}`} onClick={(event) => { event.stopPropagation(); onStar(task.id) }} aria-label={task.starred ? 'Remove star' : 'Add star'}>
         <Star size={15} fill={task.starred ? 'currentColor' : 'none'} />
       </button>
-      <button className="delete-button" onClick={(event) => { event.stopPropagation(); cancelOpen(); onDelete(task.id) }} aria-label={`Delete ${task.title}`} title="Delete task">
+      <button className="delete-button" onClick={(event) => { event.stopPropagation(); onDelete(task.id) }} aria-label={`Delete ${task.title}`} title="Delete task">
         <Trash2 size={15} />
       </button>
-      <button className="task-chevron" onClick={(event) => { event.stopPropagation(); cancelOpen(); onOpen(task.id) }} aria-label={`Open details for ${task.title}`}><ChevronRight size={15} /></button>
+      <button className="task-chevron" onClick={(event) => { event.stopPropagation(); onOpen(task.id) }} aria-label={`Open details for ${task.title}`}><ChevronRight size={15} /></button>
     </article>
   )
 }

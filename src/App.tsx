@@ -143,7 +143,6 @@ function App() {
   }, [clockTick, data.tasks, query, selectedView])
 
   const completedTasks = useMemo(() => data.tasks.filter((task) => task.completed), [data.tasks])
-  const unplannedCount = useMemo(() => data.tasks.filter((task) => !task.completed && task.focusDates.length === 0).length, [data.tasks])
   const searching = Boolean(query.trim())
   const activeListId = selectedView.startsWith('list:') ? selectedView.slice(5) : null
   const activeList = sortedLists.find((list) => list.id === activeListId)
@@ -160,7 +159,7 @@ function App() {
       : selectedView === 'today'
         ? { title: 'Today', eyebrow: new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date()), mode: 'smart' as const }
         : selectedView === 'calendar'
-        ? { title: 'Calendar', eyebrow: unplannedCount === 0 ? 'Every task has a focus day' : `${unplannedCount} unplanned ${unplannedCount === 1 ? 'task' : 'tasks'}`, mode: 'smart' as const }
+        ? { title: 'Calendar', eyebrow: openCountLabel, mode: 'smart' as const }
         : selectedView === 'starred'
           ? { title: 'Starred', eyebrow: openCountLabel, mode: 'smart' as const }
           : { title: activeList?.name ?? 'List', eyebrow: openCountLabel, mode: 'list' as const }
@@ -369,6 +368,18 @@ function App() {
     })
   }
 
+  const moveList = (listId: string, beforeListId?: string) => {
+    setData((current) => {
+      const moving = current.lists.find((list) => list.id === listId)
+      if (!moving) return current
+      const ordered = [...current.lists].sort((a, b) => a.sortOrder - b.sortOrder).filter((list) => list.id !== listId)
+      const rawIndex = beforeListId ? ordered.findIndex((list) => list.id === beforeListId) : ordered.length
+      ordered.splice(rawIndex < 0 ? ordered.length : rawIndex, 0, moving)
+      const orderOf = new Map(ordered.map((list, position) => [list.id, position]))
+      return { ...current, lists: current.lists.map((list) => ({ ...list, sortOrder: orderOf.get(list.id) ?? list.sortOrder })) }
+    })
+  }
+
   const deleteList = (list: TaskList) => {
     setListMenu(null)
     setConfirmAction({
@@ -442,7 +453,7 @@ function App() {
             onMoveFocusDate={moveFocusDate}
             onRemoveFocusDate={removeFocusDate}
             onAddTaskOnDay={addTaskOnDay}
-            onAddTask={(title) => { const listId = sortedLists[0]?.id; if (listId) addTask(listId, title); else setCreateListOpen(true) }}
+            onAddTask={(title, listId) => { const target = listId ?? sortedLists[0]?.id; if (target) addTask(target, title); else setCreateListOpen(true) }}
           /> : <Board
           mode={page.mode}
           lists={sortedLists}
@@ -457,10 +468,12 @@ function App() {
           onToggleSubtask={toggleSubtask}
           onStarTask={(taskId) => { const task = data.tasks.find((item) => item.id === taskId); if (task) updateTask(taskId, { starred: !task.starred }) }}
           onDeleteTask={deleteTask}
+          onSetDueTask={(taskId, dueAt) => updateTask(taskId, { dueAt })}
           onRenameTask={(taskId, title) => updateTask(taskId, { title })}
           onRenameList={renameListById}
           onListMenu={openListMenu}
           onMoveTask={moveTask}
+          onMoveList={moveList}
           onCreateList={() => setCreateListOpen(true)}
         />}
       </section>

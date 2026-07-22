@@ -224,8 +224,13 @@ function scheduleNotifications(data) {
     notificationRefreshTimer = setTimeout(() => scheduleNotifications(data), maximumDelay)
   }
 
-  const openCount = (data?.tasks ?? []).filter((task) => !task.completed).length
-  if (process.platform === 'darwin') app.dock.setBadge(openCount ? String(openCount) : '')
+  const badgeNow = new Date()
+  const dueTodayCount = (data?.tasks ?? []).filter((task) => {
+    if (task.completed || !task.dueAt) return false
+    const due = new Date(task.dueAt)
+    return due.getFullYear() === badgeNow.getFullYear() && due.getMonth() === badgeNow.getMonth() && due.getDate() === badgeNow.getDate()
+  }).length
+  if (process.platform === 'darwin') app.dock.setBadge(dueTodayCount ? String(dueTodayCount) : '')
 }
 
 ipcMain.handle('knot:load', async () => {

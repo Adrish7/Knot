@@ -18,10 +18,12 @@ interface BoardProps {
   onToggleSubtask: (taskId: string, subtaskId: string) => void
   onStarTask: (taskId: string) => void
   onDeleteTask: (taskId: string) => void
+  onSetDueTask: (taskId: string, dueAt: string | null) => void
   onRenameTask: (taskId: string, title: string) => void
   onRenameList: (listId: string, name: string) => void
   onListMenu: (list: TaskList, anchor: HTMLElement) => void
   onMoveTask: (taskId: string, targetListId: string, beforeTaskId?: string) => void
+  onMoveList: (listId: string, beforeListId?: string) => void
   onCreateList: () => void
 }
 
@@ -40,6 +42,7 @@ function sortTasks(tasks: Task[], mode: SortMode) {
 
 export function Board(props: BoardProps) {
   const [draggedTask, setDraggedTask] = useState<string | null>(null)
+  const [dropHint, setDropHint] = useState<{ listId: string; beforeTaskId: string | null } | null>(null)
   const { mode, lists, tasks, activeListId, sortMode } = props
 
   const grouped = useMemo(() => new Map(lists.map((list) => [list.id, sortTasks(tasks.filter((task) => task.listId === list.id), sortMode)])), [lists, tasks, sortMode])
@@ -50,53 +53,148 @@ export function Board(props: BoardProps) {
     event.dataTransfer.setData('text/plain', taskId)
   }
 
-  const finishDrag = () => setDraggedTask(null)
-
-  const dropAtTask = (event: React.DragEvent, targetTask: Task, edge: DropEdge) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const taskId = draggedTask || event.dataTransfer.getData('text/plain')
-    if (!taskId || taskId === targetTask.id) {
-      setDraggedTask(null)
-      return
-    }
-
-    const targetTasks = sortTasks(
-      tasks.filter((task) => task.listId === targetTask.listId && !task.completed && task.id !== taskId),
-      'manual',
-    )
-    const targetIndex = targetTasks.findIndex((task) => task.id === targetTask.id)
-    const insertionIndex = targetIndex + (edge === 'after' ? 1 : 0)
-    const beforeTaskId = targetTasks[insertionIndex]?.id
-    props.onMoveTask(taskId, targetTask.listId, beforeTaskId)
+  const finishDrag = () => {
     setDraggedTask(null)
+    setDropHint(null)
   }
 
-  const dropInto = (event: React.DragEvent, listId: string, beforeTaskId?: string) => {
+  // The task the cursor would insert before: the first task (skipping the dragged one)
+  // whose vertical midpoint is below the cursor. Null means "append at the end".
+  const findBeforeTask = (container: HTMLElement, clientY: number, taskId: string) => {
+    for (const item of container.querySelectorAll<HTMLElement>('.task-item[data-task-id]')) {
+      const id = item.dataset.taskId
+      if (!id || id === taskId) continue
+      const bounds = item.getBoundingClientRect()
+      if (clientY < bounds.top + bounds.height / 2) return id
+    }
+    return null
+  }
+
+  const dragOverList = (event: React.DragEvent, listId: string) => {
+    if (!draggedTask) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    const beforeTaskId = findBeforeTask(event.currentTarget as HTMLElement, event.clientY, draggedTask)
+    setDropHint((current) => current?.listId === listId && current.beforeTaskId === beforeTaskId ? current : { listId, beforeTaskId })
+  }
+
+  const dragLeaveList = (event: React.DragEvent, listId: string) => {
+    const nextTarget = event.relatedTarget
+    if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+      setDropHint((current) => current?.listId === listId ? null : current)
+    }
+  }
+
+  const dropOnList = (event: React.DragEvent, listId: string) => {
     event.preventDefault()
     const taskId = draggedTask || event.dataTransfer.getData('text/plain')
-    if (taskId) props.onMoveTask(taskId, listId, beforeTaskId)
-    setDraggedTask(null)
+    if (taskId) {
+      const beforeTaskId = findBeforeTask(event.currentTarget as HTMLElement, event.clientY, taskId)
+      props.onMoveTask(taskId, listId, beforeTaskId ?? undefined)
+    }
+    finishDrag()
+  }
+
+  // Which edge of this task the guide line sits on, given the current drop hint.
+  const edgeFor = (listId: string, open: Task[], task: Task): DropEdge | null => {
+    if (!dropHint || dropHint.listId !== listId) return null
+    if (dropHint.beforeTaskId === task.id) return 'before'
+    if (dropHint.beforeTaskId === null) {
+      const last = [...open].reverse().find((item) => item.id !== draggedTask)
+      if (last?.id === task.id) return 'after'
+    }
+    return null
+  }
+
+  const showEmptyDropLine = (listId: string, open: Task[]) => dropHint?.listId === listId && open.every((task) => task.id === draggedTask)
+
+  const [draggedList, setDraggedList] = useState<string | null>(null)
+  const [listHint, setListHint] = useState<{ listId: string; edge: 'left' | 'right' } | null>(null)
+
+  const finishListDrag = () => {
+    setDraggedList(null)
+    setListHint(null)
+  }
+
+  const startListDrag = (event: React.DragEvent, listId: string) => {
+    // A press on the header's menu button or rename input must not pick up the column.
+    if (event.target instanceof Element && event.target.closest('button, input')) {
+      event.preventDefault()
+      return
+    }
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/knot-list', listId)
+    setDraggedList(listId)
+  }
+
+  const dragOverColumn = (event: React.DragEvent, listId: string) => {
+    if (!draggedList) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (draggedList === listId) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const edge = event.clientX < bounds.left + bounds.width / 2 ? 'left' : 'right'
+    setListHint((current) => current?.listId === listId && current.edge === edge ? current : { listId, edge })
+  }
+
+  const dragLeaveColumn = (event: React.DragEvent, listId: string) => {
+    const nextTarget = event.relatedTarget
+    if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+      setListHint((current) => current?.listId === listId ? null : current)
+    }
+  }
+
+  const dropOnColumn = (event: React.DragEvent, listId: string) => {
+    if (!draggedList) return
+    event.preventDefault()
+    event.stopPropagation()
+    const ordered = lists.filter((list) => list.id !== draggedList)
+    const index = ordered.findIndex((list) => list.id === listId)
+    if (index >= 0) {
+      const bounds = event.currentTarget.getBoundingClientRect()
+      const insertion = index + (event.clientX < bounds.left + bounds.width / 2 ? 0 : 1)
+      props.onMoveList(draggedList, ordered[insertion]?.id)
+    }
+    finishListDrag()
+  }
+
+  const dropOnCanvas = (event: React.DragEvent) => {
+    if (!draggedList) return
+    event.preventDefault()
+    const columns = [...event.currentTarget.querySelectorAll<HTMLElement>('.board-column')]
+    const before = columns.find((column) => column.dataset.listId !== draggedList && event.clientX < column.getBoundingClientRect().left + column.getBoundingClientRect().width / 2)
+    props.onMoveList(draggedList, before?.dataset.listId)
+    finishListDrag()
   }
 
   if (mode === 'board') {
     return (
       <main className="content-area board-scroll">
-        <div className="board-canvas">
+        <div className="board-canvas" onDragOver={(event) => { if (draggedList) event.preventDefault() }} onDrop={dropOnCanvas}>
           {lists.map((list) => {
             const open = grouped.get(list.id) ?? []
             return (
-              <section className={`list-card is-accented ${draggedTask ? 'is-drop-target' : ''}`} key={list.id} style={{ '--list-accent': list.color } as React.CSSProperties} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropInto(event, list.id)}>
-                <header className="list-card-header">
+              <div
+                key={list.id}
+                className={`board-column ${draggedList === list.id ? 'is-dragging-column' : ''} ${listHint?.listId === list.id ? `drop-${listHint.edge}` : ''}`}
+                data-list-id={list.id}
+                onDragOver={(event) => dragOverColumn(event, list.id)}
+                onDragLeave={(event) => dragLeaveColumn(event, list.id)}
+                onDrop={(event) => dropOnColumn(event, list.id)}
+              >
+              <section className={`list-card is-accented ${dropHint?.listId === list.id ? 'is-drop-target' : ''}`} style={{ '--list-accent': list.color } as React.CSSProperties} onDragOver={(event) => dragOverList(event, list.id)} onDragLeave={(event) => dragLeaveList(event, list.id)} onDrop={(event) => dropOnList(event, list.id)}>
+                <header className="list-card-header" draggable={!draggedTask} onDragStart={(event) => startListDrag(event, list.id)} onDragEnd={finishListDrag}>
                   <div><span className="color-orb" style={{ background: list.color, color: list.color }} /><EditableListName list={list} onRename={props.onRenameList} /><span className="card-count">{open.length}</span></div>
                   <button className="icon-button small" aria-label={`Options for ${list.name}`} aria-haspopup="menu" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); props.onListMenu(list, event.currentTarget) }}><MoreHorizontal size={16} /></button>
                 </header>
                 <QuickAdd expanded={props.quickAddListId === list.id} onExpand={() => props.onQuickAddList(list.id)} onCancel={() => props.onQuickAddList(null)} onAdd={(title, openDetails) => props.onAddTask(list.id, title, openDetails)} />
                 <div className="task-stack">
-                  {open.map((task) => <TaskItem key={task.id} task={task} onOpen={props.onOpenTask} onComplete={props.onCompleteTask} onToggleSubtask={props.onToggleSubtask} onStar={props.onStarTask} onDelete={props.onDeleteTask} onRename={props.onRenameTask} onDragStart={sortMode === 'manual' ? startDrag : undefined} onDragEnd={finishDrag} dragActive={Boolean(draggedTask)} canDrop={Boolean(draggedTask && draggedTask !== task.id)} onDropAt={(event, _targetId, edge) => dropAtTask(event, task, edge)} />)}
+                  {open.map((task) => <TaskItem key={task.id} task={task} onOpen={props.onOpenTask} onComplete={props.onCompleteTask} onToggleSubtask={props.onToggleSubtask} onStar={props.onStarTask} onDelete={props.onDeleteTask} onSetDue={props.onSetDueTask} onRename={props.onRenameTask} onDragStart={sortMode === 'manual' ? startDrag : undefined} onDragEnd={finishDrag} dropEdge={edgeFor(list.id, open, task)} />)}
+                  {showEmptyDropLine(list.id, open) && <div className="drop-line" />}
                   {open.length === 0 && <div className="mini-empty"><CheckCircle2 size={19} /><span>All clear</span></div>}
                 </div>
               </section>
+              </div>
             )
           })}
           <button className="new-list-card" onClick={props.onCreateList}><span><Plus size={20} /></span><strong>New list</strong></button>
@@ -123,7 +221,12 @@ export function Board(props: BoardProps) {
 
         {defaultListId && mode === 'list' && <QuickAdd expanded={props.quickAddListId === defaultListId} onExpand={() => props.onQuickAddList(defaultListId)} onCancel={() => props.onQuickAddList(null)} onAdd={(title, openDetails) => props.onAddTask(defaultListId, title, openDetails)} />}
 
-        <div className="focus-tasks" onDragOver={(event) => event.preventDefault()} onDrop={(event) => defaultListId && dropInto(event, defaultListId)}>
+        <div
+          className="focus-tasks"
+          onDragOver={(event) => defaultListId && dragOverList(event, defaultListId)}
+          onDragLeave={(event) => defaultListId && dragLeaveList(event, defaultListId)}
+          onDrop={(event) => defaultListId && dropOnList(event, defaultListId)}
+        >
           {open.map((task) => (
             <TaskItem
               key={task.id}
@@ -133,12 +236,11 @@ export function Board(props: BoardProps) {
               onComplete={props.onCompleteTask}
               onToggleSubtask={props.onToggleSubtask}
               onStar={props.onStarTask} onDelete={props.onDeleteTask}
+              onSetDue={props.onSetDueTask}
               onRename={props.onRenameTask}
               onDragStart={sortMode === 'manual' && mode === 'list' ? startDrag : undefined}
               onDragEnd={finishDrag}
-              dragActive={Boolean(draggedTask)}
-              canDrop={Boolean(draggedTask && draggedTask !== task.id)}
-              onDropAt={(event, _targetId, edge) => dropAtTask(event, task, edge)}
+              dropEdge={defaultListId ? edgeFor(defaultListId, open, task) : null}
             />
           ))}
         </div>

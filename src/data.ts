@@ -3,7 +3,7 @@ import type { DeletedTask, KnotData, Preferences, Recurrence, Subtask, Task, Tas
 
 export const TRASH_RETENTION_DAYS = 30
 
-export const palette = ['#778b72', '#ad7f62', '#71869c', '#9a7d96', '#a38b54', '#738e88']
+export const palette = ['#6d8a64', '#b3714e', '#5f81a6', '#9d6f98', '#b16a7c', '#4f8f86', '#ab8d52', '#8f8a4e', '#a85c50', '#7379a8', '#8d7b68', '#6f7f88']
 const recurrences: Recurrence[] = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly']
 const sortModes: Preferences['sortMode'][] = ['manual', 'date', 'starred']
 const themes: Preferences['theme'][] = ['light', 'dark', 'system']

@@ -16,6 +16,7 @@ interface TaskPanelProps {
 
 export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onClose }: TaskPanelProps) {
   const [newSubtask, setNewSubtask] = useState('')
+  const listColor = lists.find((list) => list.id === task.listId)?.color
   const addSubtask = () => {
     if (!newSubtask.trim()) return
     onUpdate({ subtasks: [...task.subtasks, { id: uid('subtask'), title: newSubtask.trim(), completed: false }] })
@@ -23,7 +24,7 @@ export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onClose
   }
 
   return (
-    <aside className="task-panel" aria-label="Task details">
+    <aside className={`task-panel ${listColor ? 'is-accented' : ''}`} style={listColor ? { '--list-accent': listColor } as React.CSSProperties : undefined} aria-label="Task details">
       <div className="panel-topline">
         <button className={`panel-complete ${task.completed ? 'done' : ''}`} onClick={() => onComplete(!task.completed)}>
           <span>{task.completed && <Check size={14} strokeWidth={3} />}</span>{task.completed ? 'Completed' : 'Mark complete'}

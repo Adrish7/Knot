@@ -1,11 +1,13 @@
-import { ChevronLeft, ChevronRight, Clock3, X } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { dateKey, formatDue } from '../format'
 
 interface DateTimePickerProps {
   value: string | null
   placeholder: string
   onChange: (iso: string | null) => void
+  iconTrigger?: boolean
 }
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
@@ -25,8 +27,7 @@ export function FocusDayPicker({ dates, onChange }: { dates: string[]; onChange:
   const fieldRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
 
-  useLayoutEffect(() => {
-    if (!open) return
+  const reposition = () => {
     const field = fieldRef.current
     const popover = popoverRef.current
     if (!field || !popover) return
@@ -35,6 +36,10 @@ export function FocusDayPicker({ dates, onChange }: { dates: string[]; onChange:
     let top = rect.bottom + 8
     if (top + popover.offsetHeight > window.innerHeight - 12) top = Math.max(12, rect.top - popover.offsetHeight - 8)
     setCoords({ top, left })
+  }
+
+  useLayoutEffect(() => {
+    if (open) reposition()
   }, [open, viewMonth])
 
   useEffect(() => {
@@ -53,7 +58,7 @@ export function FocusDayPicker({ dates, onChange }: { dates: string[]; onChange:
     }
     const onScroll = (event: Event) => {
       if (event.target instanceof Node && popoverRef.current?.contains(event.target)) return
-      setOpen(false)
+      reposition()
     }
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -82,7 +87,7 @@ export function FocusDayPicker({ dates, onChange }: { dates: string[]; onChange:
       <button type="button" className={`picker-trigger ${open ? 'is-open' : ''}`} onClick={() => { if (open) { setOpen(false); return } setViewMonth(monthStart(new Date())); setOpen(true) }}>
         Add a day
       </button>
-      {open && (
+      {open && createPortal(
         <div className="date-popover" ref={popoverRef} role="dialog" aria-label="Choose focus days" style={{ top: coords.top, left: coords.left }}>
           <div className="date-popover-head">
             <span>{monthLabel}</span>
@@ -110,13 +115,14 @@ export function FocusDayPicker({ dates, onChange }: { dates: string[]; onChange:
               <button type="button" onClick={() => { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); toggleDay(tomorrow) }}>Tomorrow</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
 }
 
-export function DateTimePicker({ value, placeholder, onChange }: DateTimePickerProps) {
+export function DateTimePicker({ value, placeholder, onChange, iconTrigger }: DateTimePickerProps) {
   const [open, setOpen] = useState(false)
   const [viewMonth, setViewMonth] = useState(() => monthStart(new Date()))
   const [coords, setCoords] = useState({ top: 0, left: 0 })
@@ -129,8 +135,7 @@ export function DateTimePicker({ value, placeholder, onChange }: DateTimePickerP
     setOpen(true)
   }
 
-  useLayoutEffect(() => {
-    if (!open) return
+  const reposition = () => {
     const field = fieldRef.current
     const popover = popoverRef.current
     if (!field || !popover) return
@@ -139,6 +144,10 @@ export function DateTimePicker({ value, placeholder, onChange }: DateTimePickerP
     let top = rect.bottom + 8
     if (top + popover.offsetHeight > window.innerHeight - 12) top = Math.max(12, rect.top - popover.offsetHeight - 8)
     setCoords({ top, left })
+  }
+
+  useLayoutEffect(() => {
+    if (open) reposition()
   }, [open, viewMonth])
 
   useEffect(() => {
@@ -157,7 +166,7 @@ export function DateTimePicker({ value, placeholder, onChange }: DateTimePickerP
     }
     const onScroll = (event: Event) => {
       if (event.target instanceof Node && popoverRef.current?.contains(event.target)) return
-      setOpen(false)
+      reposition()
     }
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -172,7 +181,7 @@ export function DateTimePicker({ value, placeholder, onChange }: DateTimePickerP
   const commitDay = (day: Date) => {
     const next = new Date(day)
     if (selected) next.setHours(selected.getHours(), selected.getMinutes(), 0, 0)
-    else next.setHours(9, 0, 0, 0)
+    else next.setHours(8, 0, 0, 0)
     onChange(next.toISOString())
   }
 
@@ -192,19 +201,31 @@ export function DateTimePicker({ value, placeholder, onChange }: DateTimePickerP
   const monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(viewMonth)
   const timeValue = selected
     ? `${String(selected.getHours()).padStart(2, '0')}:${String(selected.getMinutes()).padStart(2, '0')}`
-    : '09:00'
+    : '08:00'
 
   return (
-    <div className="picker-field" ref={fieldRef}>
-      <button type="button" className={`picker-trigger ${value ? 'has-value' : ''} ${open ? 'is-open' : ''}`} onClick={() => (open ? setOpen(false) : openPicker())}>
-        {value ? formatDue(value) : placeholder}
-      </button>
-      {value && (
+    <div className={`picker-field ${iconTrigger ? 'is-icon-field' : ''}`} ref={fieldRef}>
+      {iconTrigger ? (
+        <button
+          type="button"
+          className={`task-date-button ${value ? 'has-value' : ''} ${open ? 'is-open' : ''}`}
+          aria-label={value ? `Due ${formatDue(value)} — change date` : placeholder}
+          title={value ? formatDue(value) : placeholder}
+          onClick={(event) => { event.stopPropagation(); open ? setOpen(false) : openPicker() }}
+        >
+          <CalendarDays size={15} />
+        </button>
+      ) : (
+        <button type="button" className={`picker-trigger ${value ? 'has-value' : ''} ${open ? 'is-open' : ''}`} onClick={() => (open ? setOpen(false) : openPicker())}>
+          {value ? formatDue(value) : placeholder}
+        </button>
+      )}
+      {value && !iconTrigger && (
         <button type="button" className="picker-clear" aria-label="Clear date" onClick={() => { onChange(null); setOpen(false) }}>
           <X size={12} />
         </button>
       )}
-      {open && (
+      {open && createPortal(
         <div className="date-popover" ref={popoverRef} role="dialog" aria-label="Choose date and time" style={{ top: coords.top, left: coords.left }}>
           <div className="date-popover-head">
             <span>{monthLabel}</span>
@@ -228,15 +249,14 @@ export function DateTimePicker({ value, placeholder, onChange }: DateTimePickerP
           </div>
           <div className="date-popover-foot">
             <div className="date-shortcuts">
-              <button type="button" onClick={() => commitDay(new Date())}>Today</button>
-              <button type="button" onClick={() => { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); commitDay(tomorrow) }}>Tomorrow</button>
+              {iconTrigger && value && <button type="button" onClick={() => { onChange(null); setOpen(false) }}>Clear</button>}
             </div>
             <label className="time-field">
-              <Clock3 size={13} />
               <input type="time" value={timeValue} onChange={(event) => commitTime(event.target.value)} aria-label="Time" />
             </label>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
