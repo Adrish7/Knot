@@ -1,7 +1,7 @@
 import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Flag, Plus, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { dateKey, formatDayKey, formatDue, isOverdue, isToday, todayKey } from '../format'
-import type { Task, TaskList } from '../types'
+import type { FocusStatus, Task, TaskList } from '../types'
 
 interface CalendarPageProps {
   tasks: Task[]
@@ -10,6 +10,7 @@ interface CalendarPageProps {
   onAddFocusDate: (taskId: string, day: string) => void
   onMoveFocusDate: (taskId: string, fromDay: string, toDay: string) => void
   onRemoveFocusDate: (taskId: string, day: string) => void
+  onSetFocusStatus: (taskId: string, day: string, status: FocusStatus | null) => void
   onAddTaskOnDay: (day: string, title: string) => void
   onAddTask: (title: string, listId?: string) => void
 }
@@ -22,7 +23,7 @@ interface DragInfo {
 }
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const MONTH_MAX_CHIPS = 3
+const MONTH_MAX_CHIPS = 4
 const YEAR_MONTHS_BACK = 12
 const YEAR_MONTHS_FORWARD = 24
 
@@ -49,7 +50,7 @@ function monthGridDays(monthDate: Date) {
   return Array.from({ length: Math.ceil(span / 7) * 7 }, (_, index) => addDays(start, index))
 }
 
-export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveFocusDate, onRemoveFocusDate, onAddTaskOnDay, onAddTask }: CalendarPageProps) {
+export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveFocusDate, onRemoveFocusDate, onSetFocusStatus, onAddTaskOnDay, onAddTask }: CalendarPageProps) {
   const [view, setView] = useState<CalView>('month')
   const [cursor, setCursor] = useState(() => new Date())
   const [drag, setDrag] = useState<DragInfo | null>(null)
@@ -101,7 +102,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
   }, [tasks])
 
   const trayTasks = useMemo(() => tasks
-    .filter((task) => !task.completed && (
+    .filter((task) => task.listId !== null && !task.completed && (
       trayList === 'all'
       || (trayList === 'today'
         ? isToday(task.dueAt) || task.focusDates.includes(today)
@@ -116,7 +117,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
 
   const dragTask = drag ? tasks.find((task) => task.id === drag.taskId) : null
   const dragDueDay = dragTask?.dueAt ? dateKey(new Date(dragTask.dueAt)) : null
-  const dragListColor = dragTask ? listById.get(dragTask.listId)?.color : undefined
+  const dragListColor = dragTask?.listId ? listById.get(dragTask.listId)?.color : undefined
   const trayListColor = trayList === 'all' || trayList === 'today' ? undefined : listById.get(trayList)?.color
 
   const label = view === 'month' || view === 'year'
@@ -199,13 +200,16 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
   }
 
   const renderChip = (task: Task, day: string, kind: 'focus' | 'due') => {
-    const list = listById.get(task.listId)
+    const list = task.listId ? listById.get(task.listId) : undefined
     const dueHere = task.dueAt ? dateKey(new Date(task.dueAt)) === day : false
     const dragging = drag?.taskId === task.id && drag.fromDay === (kind === 'focus' ? day : null)
+    const status = kind === 'focus' ? task.focusStatus[day] : undefined
+    const nextStatus: FocusStatus | null = status === 'done' ? 'missed' : status === 'missed' ? null : 'done'
+    const statusHint = status === 'done' ? 'Done this day — click to mark not done' : status === 'missed' ? 'Not done — click to clear' : 'Mark done for this day'
     return (
       <div
         key={`${task.id}:${kind}`}
-        className={`cal-chip ${kind === 'due' ? 'is-due' : ''} ${task.completed ? 'is-done' : ''} ${dragging ? 'is-dragging' : ''}`}
+        className={`cal-chip ${kind === 'due' ? 'is-due' : ''} ${task.completed ? 'is-done' : ''} ${status === 'done' ? 'is-day-done' : ''} ${status === 'missed' ? 'is-day-missed' : ''} ${dragging ? 'is-dragging' : ''}`}
         style={{ '--chip-color': list?.color ?? 'var(--accent)' } as React.CSSProperties}
         role="button"
         tabIndex={0}
@@ -216,7 +220,19 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
         onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenTask(task.id) } }}
         title={kind === 'due' ? `${task.title} — due, drag to plan a focus day` : task.title}
       >
-        {dueHere ? <Flag size={9} strokeWidth={2.5} /> : <span className="cal-chip-dot" />}
+        {kind === 'focus' && !task.completed ? (
+          <button
+            className="cal-chip-state"
+            onClick={(event) => { event.stopPropagation(); onSetFocusStatus(task.id, day, nextStatus) }}
+            aria-label={`${task.title}: ${statusHint}`}
+            title={statusHint}
+          >
+            {status === 'done' ? <Check size={10} strokeWidth={3} />
+              : status === 'missed' ? <X size={10} strokeWidth={3} />
+              : dueHere ? <Flag size={9} strokeWidth={2.5} />
+              : <span className="cal-chip-dot" />}
+          </button>
+        ) : dueHere ? <Flag size={9} strokeWidth={2.5} /> : <span className="cal-chip-dot" />}
         <span className="cal-chip-title">{task.title}</span>
         {kind === 'focus' && (
           <button
@@ -374,7 +390,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
         </form>
         <div className="cal-tray-list">
           {trayTasks.map((task) => {
-            const list = listById.get(task.listId)
+            const list = task.listId ? listById.get(task.listId) : undefined
             const nextFocus = task.focusDates.find((day) => day >= today) ?? task.focusDates[task.focusDates.length - 1]
             return (
               <div

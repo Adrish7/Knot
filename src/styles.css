@@ -19,6 +19,7 @@
   --sage-deep: #52634f;
   --gold: #a57f45;
   --danger: #b65f52;
+  --done: #3e9257;
   --on-accent: #ffffff;
   --shadow-sm: 0 1px 2px rgba(42, 43, 39, 0.04), 0 5px 18px rgba(42, 43, 39, 0.035);
   --shadow-md: 0 20px 60px rgba(48, 48, 42, 0.11), 0 2px 8px rgba(48, 48, 42, 0.07);
@@ -55,6 +56,7 @@
   --sage-deep: #c7d6c1;
   --gold: #d0af78;
   --danger: #e28d81;
+  --done: #7ecb8f;
   --on-accent: #1d1e19;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18), 0 8px 24px rgba(0, 0, 0, 0.14);
   --shadow-md: 0 24px 70px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -196,6 +198,33 @@ kbd { display: inline-grid; place-items: center; min-width: 17px; height: 17px; 
 .drop-line { position: relative; height: 2px; margin: 3px 10px; border-radius: 99px; background: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface) 75%, transparent), 0 2px 7px color-mix(in srgb, var(--accent) 38%, transparent); pointer-events: none; }
 .drop-line::after { content: ''; position: absolute; left: -3px; top: -2.5px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .task-item.is-completed { opacity: .62; }
+
+/* Ticking a task: the check pops in with a soft ring, the title strikes through,
+   then the row collapses before the state change moves it to Completed. */
+.task-item.is-completing .task-check > span { border-color: var(--accent); background: var(--accent); animation: check-ring 520ms ease-out both; }
+.task-item.is-completing .task-check svg { animation: check-pop 300ms var(--ease) both; }
+.task-item.is-completing .task-title { text-decoration: line-through; animation: strike-fade 240ms 100ms var(--ease) both; }
+.task-item.is-vanishing { min-height: 0; overflow: hidden; pointer-events: none; animation: row-vanish 260ms var(--ease) forwards; }
+@keyframes check-pop {
+  0% { transform: scale(.2); opacity: 0; }
+  55% { transform: scale(1.3); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes check-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 42%, transparent); }
+  100% { box-shadow: 0 0 0 11px transparent; }
+}
+@keyframes strike-fade {
+  from { color: var(--text); text-decoration-color: transparent; }
+  to { color: var(--text-soft); text-decoration-color: var(--text-faint); }
+}
+@keyframes row-vanish {
+  from { height: var(--row-h); opacity: 1; }
+  to { height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-item.is-completing .task-check > span, .task-item.is-completing .task-check svg, .task-item.is-completing .task-title, .task-item.is-vanishing { animation-duration: 1ms; animation-delay: 0ms; }
+}
 .task-item.is-compact { min-height: 43px; padding-top: 7px; padding-bottom: 6px; }
 .task-item.is-compact .task-check { top: 9px; }
 .focus-completed .task-item.is-compact .task-check { top: 16px; }
@@ -434,6 +463,17 @@ kbd { display: inline-grid; place-items: center; min-width: 17px; height: 17px; 
 .cal-chip-remove { display: grid; place-items: center; width: 16px; height: 16px; flex: 0 0 auto; margin: -2px -3px -2px 0; border-radius: 5px; background: transparent; color: var(--text-faint); opacity: 0; transition: 130ms ease; }
 .cal-chip:hover .cal-chip-remove, .cal-chip-remove:focus-visible { opacity: 1; }
 .cal-chip-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.cal-chip-state { display: grid; place-items: center; width: 16px; height: 16px; flex: 0 0 auto; margin: -2px 0 -2px -3px; padding: 0; line-height: 0; border-radius: 5px; background: transparent; }
+.cal-chip-state:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
+.cal-chip-state svg { display: block; }
+.cal-chip.is-day-done { background: color-mix(in srgb, var(--done) 17%, transparent); }
+.cal-chip.is-day-done:hover { background: color-mix(in srgb, var(--done) 26%, transparent); }
+.cal-chip.is-day-done .cal-chip-title { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--done) 55%, var(--text-faint)); color: color-mix(in srgb, var(--done) 62%, var(--text)); }
+.cal-chip.is-day-done .cal-chip-state svg { color: var(--done); }
+.cal-chip.is-day-missed { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+.cal-chip.is-day-missed:hover { background: color-mix(in srgb, var(--danger) 25%, transparent); }
+.cal-chip.is-day-missed .cal-chip-title { color: var(--danger); }
+.cal-chip.is-day-missed .cal-chip-state svg { color: var(--danger); }
 .cal-more { padding: 1px 7px; background: transparent; color: var(--text-faint); text-align: left; font-size: 10px; }
 .cal-more:hover { color: var(--text); }
 .cal-quick { width: 100%; height: 26px; padding: 0 7px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border)); border-radius: 7px; outline: 0; background: var(--surface); font-size: 11px; }

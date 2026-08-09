@@ -1,6 +1,7 @@
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type Recurrence = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly'
 export type SortMode = 'manual' | 'date' | 'starred'
+export type FocusStatus = 'done' | 'missed'
 export type ViewId = 'all' | 'today' | 'calendar' | 'starred' | 'completed' | 'trash' | `list:${string}`
 
 export interface TaskList {
@@ -19,11 +20,12 @@ export interface Subtask {
 
 export interface Task {
   id: string
-  listId: string
+  listId: string | null // null means the task exists only on its calendar day(s)
   title: string
   notes: string
   dueAt: string | null
   focusDates: string[] // local day keys, 'YYYY-MM-DD'
+  focusStatus: Record<string, FocusStatus> // day key -> outcome for that focus day
   reminderAt: string | null
   recurrence: Recurrence
   starred: boolean

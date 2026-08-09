@@ -1,5 +1,5 @@
 import { Bell, Calendar, CalendarDays, Check, ChevronDown, ChevronRight, GripVertical, ListTree, Repeat2, Star, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { completedSubtasks, formatDayKey, formatDue, isOverdue, todayKey } from '../format'
 import { DateTimePicker } from './DateTimePicker'
 import type { Task } from '../types'
@@ -29,10 +29,38 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
   const [dragging, setDragging] = useState(false)
   const [suppressDrag, setSuppressDrag] = useState(false)
   const [subtasksOpen, setSubtasksOpen] = useState(true)
+  // Ticking a task animates in place (check pop, strike-through, row collapse) before the
+  // state change removes the row. 'checking' plays the tick; 'vanishing' collapses the row.
+  const [completePhase, setCompletePhase] = useState<'idle' | 'checking' | 'vanishing'>('idle')
+  const [rowHeight, setRowHeight] = useState(0)
+  const completeTimers = useRef<number[]>([])
+  const rowRef = useRef<HTMLElement>(null)
+
+  useEffect(() => () => completeTimers.current.forEach(clearTimeout), [])
 
   useEffect(() => {
     if (!editingTitle) setDraftTitle(task.title)
   }, [editingTitle, task.title])
+
+  const toggleComplete = () => {
+    if (task.completed) return onComplete(task.id, false)
+    if (completePhase !== 'idle') {
+      // Second click while animating: cancel before the change lands.
+      completeTimers.current.forEach(clearTimeout)
+      completeTimers.current = []
+      setCompletePhase('idle')
+      return
+    }
+    setRowHeight(rowRef.current?.offsetHeight ?? 0)
+    setCompletePhase('checking')
+    completeTimers.current = [
+      window.setTimeout(() => setCompletePhase('vanishing'), 480),
+      window.setTimeout(() => {
+        setCompletePhase('idle')
+        onComplete(task.id, true)
+      }, 760),
+    ]
+  }
 
   const beginTitleEdit = (event: React.MouseEvent) => {
     if (!onRename) return
@@ -49,11 +77,13 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
     if (title && title !== task.title) onRename?.(task.id, title)
   }
 
-  const draggable = Boolean(onDragStart) && !task.completed && !editingTitle && !suppressDrag
+  const draggable = Boolean(onDragStart) && !task.completed && !editingTitle && !suppressDrag && completePhase === 'idle'
 
   return (
     <article
-      className={`task-item ${task.completed ? 'is-completed' : ''} ${compact ? 'is-compact' : ''} ${draggable ? 'is-draggable' : ''} ${dragging ? 'is-dragging' : ''} ${dropEdge ? `drop-${dropEdge}` : ''}`}
+      ref={rowRef}
+      className={`task-item ${task.completed ? 'is-completed' : ''} ${completePhase !== 'idle' ? 'is-completing' : ''} ${completePhase === 'vanishing' ? 'is-vanishing' : ''} ${compact ? 'is-compact' : ''} ${draggable ? 'is-draggable' : ''} ${dragging ? 'is-dragging' : ''} ${dropEdge ? `drop-${dropEdge}` : ''}`}
+      style={completePhase !== 'idle' ? { '--row-h': `${rowHeight}px` } as React.CSSProperties : undefined}
       data-task-id={task.id}
       draggable={draggable}
       onMouseDownCapture={(event) => {
@@ -61,7 +91,7 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
         setSuppressDrag(event.target instanceof Element && Boolean(event.target.closest('button, input, textarea, select')))
       }}
       onClick={(event) => {
-        if (editingTitle || dragging) return
+        if (editingTitle || dragging || completePhase !== 'idle') return
         if (event.target instanceof Element && event.target.closest('button, input, textarea, select')) return
         onOpen(task.id)
       }}
@@ -75,8 +105,8 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
       }}
     >
       <GripVertical size={14} className="drag-handle" />
-      <button className="task-check" onClick={(event) => { event.stopPropagation(); onComplete(task.id, !task.completed) }} aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}>
-        <span>{task.completed && <Check size={13} strokeWidth={3} />}</span>
+      <button className="task-check" onClick={(event) => { event.stopPropagation(); toggleComplete() }} aria-label={task.completed ? 'Mark incomplete' : completePhase !== 'idle' ? 'Cancel completing' : 'Mark complete'}>
+        <span>{(task.completed || completePhase !== 'idle') && <Check size={13} strokeWidth={3} />}</span>
       </button>
       <div className="task-content">
         <div

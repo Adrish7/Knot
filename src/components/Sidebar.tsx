@@ -24,11 +24,12 @@ interface SidebarProps {
 export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount, trashCount, launchAtLogin, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onUpdate, updating }: SidebarProps) {
   const [editingListId, setEditingListId] = useState<string | null>(null)
   const [draftListName, setDraftListName] = useState('')
-  const openCount = tasks.filter((task) => !task.completed).length
+  const listedTasks = tasks.filter((task) => task.listId !== null)
+  const openCount = listedTasks.filter((task) => !task.completed).length
   const today = new Date().toDateString()
   const focusToday = todayKey()
-  const todayCount = tasks.filter((task) => !task.completed && ((task.dueAt && new Date(task.dueAt).toDateString() === today) || task.focusDates.includes(focusToday))).length
-  const starredCount = tasks.filter((task) => !task.completed && task.starred).length
+  const todayCount = listedTasks.filter((task) => !task.completed && ((task.dueAt && new Date(task.dueAt).toDateString() === today) || task.focusDates.includes(focusToday))).length
+  const starredCount = listedTasks.filter((task) => !task.completed && task.starred).length
 
   return (
     <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''}`}>

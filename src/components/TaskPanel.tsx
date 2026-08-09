@@ -42,7 +42,7 @@ export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onClose
         <div className="detail-form">
           <label className="detail-row">
             <span><ListChecks size={16} />List</span>
-            <span className="detail-input select-wrap"><select value={task.listId} onChange={(event) => onUpdate({ listId: event.target.value })}>{lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}</select><ChevronDown size={14} /></span>
+            <span className="detail-input select-wrap"><select value={task.listId ?? ''} onChange={(event) => onUpdate({ listId: event.target.value || null })}>{task.listId === null && <option value="">Calendar only</option>}{lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}</select><ChevronDown size={14} /></span>
           </label>
           <div className="detail-row">
             <span><CalendarClock size={16} />Due</span>

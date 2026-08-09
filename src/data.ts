@@ -1,5 +1,5 @@
 import { dateKey } from './format'
-import type { DeletedTask, KnotData, Preferences, Recurrence, Subtask, Task, TaskList } from './types'
+import type { DeletedTask, FocusStatus, KnotData, Preferences, Recurrence, Subtask, Task, TaskList } from './types'
 
 export const TRASH_RETENTION_DAYS = 30
 
@@ -34,7 +34,7 @@ function dayKey(daysFromNow: number) {
   return dateKey(date)
 }
 
-export function createTask(listId: string, title: string, sortOrder: number): Task {
+export function createTask(listId: string | null, title: string, sortOrder: number): Task {
   return {
     id: uid('task'),
     listId,
@@ -42,6 +42,7 @@ export function createTask(listId: string, title: string, sortOrder: number): Ta
     notes: '',
     dueAt: null,
     focusDates: [],
+    focusStatus: {},
     reminderAt: null,
     recurrence: 'none',
     starred: false,
@@ -124,9 +125,15 @@ export function normalizeData(value: unknown): KnotData | null {
   }
   const tasks = rawTasks.flatMap((candidate, index): Task[] => {
     if (!isRecord(candidate) || typeof candidate.id !== 'string' || !candidate.id.trim() || taskIds.has(candidate.id)) return []
-    const listId = typeof candidate.listId === 'string' && listIds.has(candidate.listId) ? candidate.listId : recoveryList()
+    const listId = candidate.listId === null
+      ? null
+      : typeof candidate.listId === 'string' && listIds.has(candidate.listId)
+        ? candidate.listId
+        : recoveryList()
+    const task = normalizeTask(candidate, listId, index, now)
+    if (task.listId === null && task.focusDates.length === 0) return []
     taskIds.add(candidate.id)
-    return [normalizeTask(candidate, listId, index, now)]
+    return [task]
   })
 
   const rawTrash = Array.isArray(value.trash) ? value.trash : []
@@ -139,7 +146,7 @@ export function normalizeData(value: unknown): KnotData | null {
     const deletedAt = validIso(entry.deletedAt) || now
     if (new Date(deletedAt).getTime() < cutoff) return []
     trashIds.add(candidate.id)
-    const listId = typeof candidate.listId === 'string' ? candidate.listId : ''
+    const listId = candidate.listId === null ? null : typeof candidate.listId === 'string' ? candidate.listId : ''
     return [{
       task: normalizeTask(candidate, listId, index, now),
       listName: cleanText(entry.listName) || 'Untitled list',
@@ -163,16 +170,18 @@ export function normalizeData(value: unknown): KnotData | null {
   }
 }
 
-function normalizeTask(candidate: Record<string, unknown>, listId: string, index: number, now: string): Task {
+function normalizeTask(candidate: Record<string, unknown>, listId: string | null, index: number, now: string): Task {
   const recurrence = recurrences.includes(candidate.recurrence as Recurrence) ? candidate.recurrence as Recurrence : 'none'
   const completed = Boolean(candidate.completed)
+  const focusDates = normalizeFocusDates(candidate.focusDates)
   return {
     id: candidate.id as string,
     listId,
     title: cleanText(candidate.title) || 'Untitled task',
     notes: typeof candidate.notes === 'string' ? candidate.notes : '',
     dueAt: nullableIso(candidate.dueAt),
-    focusDates: normalizeFocusDates(candidate.focusDates),
+    focusDates,
+    focusStatus: normalizeFocusStatus(candidate.focusStatus, focusDates),
     reminderAt: nullableIso(candidate.reminderAt),
     recurrence,
     starred: Boolean(candidate.starred),
@@ -190,6 +199,16 @@ function normalizeFocusDates(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   const keys = value.filter((item): item is string => typeof item === 'string' && DAY_KEY_PATTERN.test(item))
   return [...new Set(keys)].sort()
+}
+
+function normalizeFocusStatus(value: unknown, focusDates: string[]): Record<string, FocusStatus> {
+  if (!isRecord(value)) return {}
+  const result: Record<string, FocusStatus> = {}
+  for (const day of focusDates) {
+    const status = value[day]
+    if (status === 'done' || status === 'missed') result[day] = status
+  }
+  return result
 }
 
 function normalizeSubtasks(value: unknown): Subtask[] {

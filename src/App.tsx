@@ -10,9 +10,17 @@ import { TaskPanel } from './components/TaskPanel'
 import { Trash } from './components/Trash'
 import { createSeedData, createTask, nextOccurrence, normalizeData, palette, uid } from './data'
 import { isToday, todayKey } from './format'
-import type { DeletedTask, KnotData, Task, TaskList, ThemeMode, ViewId } from './types'
+import type { DeletedTask, FocusStatus, KnotData, Task, TaskList, ThemeMode, ViewId } from './types'
 
 const STORAGE_KEY = 'knot.desktop.data'
+
+function newTaskSortOrder(tasks: Task[], listId: string) {
+  return tasks.reduce((order, task) => (
+    task.listId === listId && !task.completed
+      ? Math.min(order, task.sortOrder - 1)
+      : order
+  ), 0)
+}
 
 function App() {
   const [data, setData] = useState<KnotData>(() => createSeedData())
@@ -133,7 +141,7 @@ function App() {
 
   const displayedTasks = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    let tasks = data.tasks
+    let tasks = data.tasks.filter((task) => task.listId !== null)
     if (needle) return tasks.filter((task) => `${task.title} ${task.notes} ${task.subtasks.map((item) => item.title).join(' ')}`.toLowerCase().includes(needle))
     tasks = tasks.filter((task) => !task.completed)
     if (selectedView === 'today') tasks = tasks.filter((task) => isToday(task.dueAt) || task.focusDates.includes(todayKey()))
@@ -142,12 +150,14 @@ function App() {
     return tasks
   }, [clockTick, data.tasks, query, selectedView])
 
-  const completedTasks = useMemo(() => data.tasks.filter((task) => task.completed), [data.tasks])
+  const completedTasks = useMemo(() => data.tasks.filter((task) => task.listId !== null && task.completed), [data.tasks])
   const searching = Boolean(query.trim())
   const activeListId = selectedView.startsWith('list:') ? selectedView.slice(5) : null
   const activeList = sortedLists.find((list) => list.id === activeListId)
   const openDisplayed = displayedTasks.filter((task) => !task.completed).length
   const openCountLabel = openDisplayed === 0 ? 'All done' : `${openDisplayed} open ${openDisplayed === 1 ? 'task' : 'tasks'}`
+  const calendarOpen = data.tasks.filter((task) => !task.completed).length
+  const calendarOpenCountLabel = calendarOpen === 0 ? 'All done' : `${calendarOpen} open ${calendarOpen === 1 ? 'task' : 'tasks'}`
   const page = selectedView === 'completed'
     ? { title: 'Completed', eyebrow: `${completedTasks.length} ${completedTasks.length === 1 ? 'task' : 'tasks'}`, mode: 'smart' as const }
     : selectedView === 'trash'
@@ -159,7 +169,7 @@ function App() {
       : selectedView === 'today'
         ? { title: 'Today', eyebrow: new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date()), mode: 'smart' as const }
         : selectedView === 'calendar'
-        ? { title: 'Calendar', eyebrow: openCountLabel, mode: 'smart' as const }
+        ? { title: 'Calendar', eyebrow: calendarOpenCountLabel, mode: 'smart' as const }
         : selectedView === 'starred'
           ? { title: 'Starred', eyebrow: openCountLabel, mode: 'smart' as const }
           : { title: activeList?.name ?? 'List', eyebrow: openCountLabel, mode: 'list' as const }
@@ -175,9 +185,11 @@ function App() {
   }
 
   const addTask = (listId: string, title: string, openDetails = false) => {
-    const order = data.tasks.filter((task) => task.listId === listId).length
-    const task = createTask(listId, title, order)
-    setData((current) => ({ ...current, tasks: [...current.tasks, task] }))
+    const task = createTask(listId, title, 0)
+    setData((current) => ({
+      ...current,
+      tasks: [...current.tasks, { ...task, sortOrder: newTaskSortOrder(current.tasks, listId) }],
+    }))
     if (openDetails) {
       setSelectedTaskId(task.id)
       setQuickAddListId(null)
@@ -185,26 +197,53 @@ function App() {
     showToast('Task added')
   }
 
-  const updateTask = (taskId: string, patch: Partial<Task>) => setData((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === taskId ? { ...task, ...patch } : task) }))
+  const updateTask = (taskId: string, patch: Partial<Task>) => setData((current) => ({
+    ...current,
+    tasks: current.tasks.flatMap((task) => {
+      if (task.id !== taskId) return [task]
+      const next = { ...task, ...patch }
+      if (next.listId === null && next.focusDates.length === 0) return []
+      if (patch.focusDates && !patch.focusStatus) {
+        next.focusStatus = Object.fromEntries(Object.entries(next.focusStatus).filter(([day]) => next.focusDates.includes(day)))
+      }
+      return [next]
+    }),
+  }))
 
-  const patchFocusDates = (taskId: string, patch: (dates: string[]) => string[]) => {
-    setData((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === taskId ? { ...task, focusDates: [...new Set(patch(task.focusDates))].sort() } : task) }))
+  const patchFocus = (taskId: string, patch: (task: Task) => Partial<Task>) => {
+    setData((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === taskId ? { ...task, ...patch(task) } : task) }))
   }
 
-  const addFocusDate = (taskId: string, day: string) => patchFocusDates(taskId, (dates) => [...dates, day])
-  const removeFocusDate = (taskId: string, day: string) => patchFocusDates(taskId, (dates) => dates.filter((item) => item !== day))
-  const moveFocusDate = (taskId: string, fromDay: string, toDay: string) => patchFocusDates(taskId, (dates) => [...dates.filter((item) => item !== fromDay), toDay])
+  const addFocusDate = (taskId: string, day: string) => patchFocus(taskId, (task) => ({ focusDates: [...new Set([...task.focusDates, day])].sort() }))
+  const removeFocusDate = (taskId: string, day: string) => setData((current) => ({
+    ...current,
+    tasks: current.tasks.flatMap((task) => {
+      if (task.id !== taskId) return [task]
+      const focusDates = task.focusDates.filter((item) => item !== day)
+      if (task.listId === null && focusDates.length === 0) return []
+      const { [day]: _removed, ...focusStatus } = task.focusStatus
+      return [{ ...task, focusDates, focusStatus }]
+    }),
+  }))
+  const moveFocusDate = (taskId: string, fromDay: string, toDay: string) => patchFocus(taskId, (task) => {
+    const { [fromDay]: moved, ...focusStatus } = task.focusStatus
+    return {
+      focusDates: [...new Set([...task.focusDates.filter((item) => item !== fromDay), toDay])].sort(),
+      focusStatus: moved ? { ...focusStatus, [toDay]: moved } : focusStatus,
+    }
+  })
+  const setFocusStatus = (taskId: string, day: string, status: FocusStatus | null) => patchFocus(taskId, (task) => {
+    const { [day]: _removed, ...focusStatus } = task.focusStatus
+    return { focusStatus: status ? { ...focusStatus, [day]: status } : focusStatus }
+  })
 
   const addTaskOnDay = (day: string, title: string) => {
-    const listId = sortedLists[0]?.id
-    if (!listId) {
-      setCreateListOpen(true)
-      return
-    }
-    const order = data.tasks.filter((task) => task.listId === listId).length
-    const task = { ...createTask(listId, title, order), focusDates: [day] }
-    setData((current) => ({ ...current, tasks: [...current.tasks, task] }))
-    showToast('Task added')
+    const task = { ...createTask(null, title, 0), focusDates: [day] }
+    setData((current) => ({
+      ...current,
+      tasks: [...current.tasks, task],
+    }))
+    showToast('Added to calendar only')
   }
 
   const renameListById = (listId: string, name: string) => {
@@ -248,13 +287,14 @@ function App() {
         const nextReminder = source.reminderAt ? nextOccurrence(source.reminderAt, source.recurrence) : null
         const alreadyCreated = tasks.some((task) => task.id !== source.id && !task.completed && task.listId === source.listId && task.dueAt === nextDue && task.title === source.title && task.recurrence === source.recurrence)
         if (!alreadyCreated) {
-          const next: Task = { ...source, id: uid('task'), dueAt: nextDue, focusDates: [], reminderAt: nextReminder, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: tasks.filter((task) => task.listId === source.listId).length, subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })) }
+          const next: Task = { ...source, id: uid('task'), dueAt: nextDue, focusDates: [], focusStatus: {}, reminderAt: nextReminder, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: tasks.filter((task) => task.listId === source.listId).length, subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })) }
           tasks.push(next)
         }
       }
       return { ...current, tasks }
     })
-    showToast(completed ? 'Moved to Completed' : 'Task reopened')
+    const calendarOnly = data.tasks.find((task) => task.id === taskId)?.listId === null
+    showToast(completed ? (calendarOnly ? 'Task completed' : 'Moved to Completed') : 'Task reopened')
   }
 
   const deleteTask = (taskId: string) => {
@@ -277,7 +317,7 @@ function App() {
       if (!entry) return current
       const lists = [...current.lists]
       let listId = entry.task.listId
-      if (!lists.some((list) => list.id === listId)) {
+      if (listId !== null && !lists.some((list) => list.id === listId)) {
         const revived: TaskList = { id: uid('list'), name: entry.listName, color: palette[lists.length % palette.length], createdAt: new Date().toISOString(), sortOrder: lists.length }
         lists.push(revived)
         listId = revived.id
@@ -452,6 +492,7 @@ function App() {
             onAddFocusDate={addFocusDate}
             onMoveFocusDate={moveFocusDate}
             onRemoveFocusDate={removeFocusDate}
+            onSetFocusStatus={setFocusStatus}
             onAddTaskOnDay={addTaskOnDay}
             onAddTask={(title, listId) => { const target = listId ?? sortedLists[0]?.id; if (target) addTask(target, title); else setCreateListOpen(true) }}
           /> : <Board
@@ -503,7 +544,7 @@ function App() {
 }
 
 function makeTrashEntry(task: Task, lists: TaskList[]): DeletedTask {
-  return { task, listName: lists.find((list) => list.id === task.listId)?.name ?? 'Untitled list', deletedAt: new Date().toISOString() }
+  return { task, listName: task.listId === null ? 'Calendar only' : lists.find((list) => list.id === task.listId)?.name ?? 'Untitled list', deletedAt: new Date().toISOString() }
 }
 
 function greeting() {
