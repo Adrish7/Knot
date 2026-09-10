@@ -26,6 +26,7 @@ export interface Task {
   dueAt: string | null
   focusDates: string[] // local day keys, 'YYYY-MM-DD'
   focusStatus: Record<string, FocusStatus> // day key -> outcome for that focus day
+  focusOrder: Record<string, number> // day key -> position among that day's tasks (unset = original order, after ordered ones)
   reminderAt: string | null
   recurrence: Recurrence
   starred: boolean

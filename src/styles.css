@@ -449,8 +449,8 @@ kbd { display: inline-grid; place-items: center; min-width: 17px; height: 17px; 
 .cal-add { display: grid; place-items: center; width: 21px; height: 21px; margin-left: auto; border-radius: 7px; background: transparent; color: var(--text-faint); opacity: 0; transition: 140ms ease; }
 .cal-cell:hover .cal-add, .cal-add:focus-visible { opacity: 1; }
 .cal-add:hover { background: var(--surface-3); color: var(--text); }
-.cal-chip-stack { display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow: hidden; }
-.cal-chip { display: flex; align-items: center; gap: 6px; width: 100%; padding: 3px 7px; border-radius: 7px; background: color-mix(in srgb, var(--chip-color, var(--accent)) 14%, transparent); color: var(--text); text-align: left; font-size: 10.5px; line-height: 1.45; cursor: grab; transition: background 130ms ease, opacity 130ms ease; }
+.cal-chip-stack { display: flex; flex-direction: column; gap: 3px; min-height: 0; margin: -3px 0; padding: 3px 0; overflow-y: auto; }
+.cal-chip { position: relative; display: flex; align-items: center; gap: 6px; width: 100%; padding: 3px 7px; border-radius: 7px; background: color-mix(in srgb, var(--chip-color, var(--accent)) 14%, transparent); color: var(--text); text-align: left; font-size: 10.5px; line-height: 1.45; cursor: grab; transition: background 130ms ease, opacity 130ms ease; }
 .cal-chip:hover { background: color-mix(in srgb, var(--chip-color, var(--accent)) 24%, transparent); }
 .cal-chip svg { flex: 0 0 auto; color: var(--gold); }
 .cal-chip-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--chip-color, var(--accent)); }
@@ -460,7 +460,14 @@ kbd { display: inline-grid; place-items: center; min-width: 17px; height: 17px; 
 .cal-chip.is-done { opacity: .5; cursor: default; }
 .cal-chip.is-done .cal-chip-title { text-decoration: line-through; text-decoration-color: var(--text-faint); }
 .cal-chip.is-dragging { opacity: .35; }
-.cal-chip-remove { display: grid; place-items: center; width: 16px; height: 16px; flex: 0 0 auto; margin: -2px -3px -2px 0; border-radius: 5px; background: transparent; color: var(--text-faint); opacity: 0; transition: 130ms ease; }
+.cal-chip.drop-before::before, .cal-chip.drop-after::before { content: ''; position: absolute; z-index: 3; left: 6px; right: 6px; height: 2px; border-radius: 99px; background: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface) 75%, transparent); pointer-events: none; }
+.cal-chip.drop-before::after, .cal-chip.drop-after::after { content: ''; position: absolute; z-index: 3; left: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); pointer-events: none; }
+.cal-chip.drop-before::before { top: -2.5px; }
+.cal-chip.drop-before::after { top: -4.5px; }
+.cal-chip.drop-after::before { bottom: -2.5px; }
+.cal-chip.drop-after::after { bottom: -4.5px; }
+.cal-chip-remove { display: grid; place-items: center; width: 16px; height: 16px; flex: 0 0 auto; margin: -2px -3px -2px 0; padding: 0; line-height: 0; border-radius: 5px; background: transparent; color: var(--text-faint); opacity: 0; transition: 130ms ease; }
+.cal-chip-remove svg { display: block; }
 .cal-chip:hover .cal-chip-remove, .cal-chip-remove:focus-visible { opacity: 1; }
 .cal-chip-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .cal-chip-state { display: grid; place-items: center; width: 16px; height: 16px; flex: 0 0 auto; margin: -2px 0 -2px -3px; padding: 0; line-height: 0; border-radius: 5px; background: transparent; }
@@ -474,17 +481,14 @@ kbd { display: inline-grid; place-items: center; min-width: 17px; height: 17px; 
 .cal-chip.is-day-missed:hover { background: color-mix(in srgb, var(--danger) 25%, transparent); }
 .cal-chip.is-day-missed .cal-chip-title { color: var(--danger); }
 .cal-chip.is-day-missed .cal-chip-state svg { color: var(--danger); }
-.cal-more { padding: 1px 7px; background: transparent; color: var(--text-faint); text-align: left; font-size: 10px; }
-.cal-more:hover { color: var(--text); }
 .cal-quick { width: 100%; height: 26px; padding: 0 7px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border)); border-radius: 7px; outline: 0; background: var(--surface); font-size: 11px; }
 .cal-grid.is-week .cal-cell { padding: 9px 9px 8px; }
-.cal-grid.is-week .cal-chip-stack { overflow-y: auto; }
 .cal-grid.is-week .cal-chip { padding: 5px 8px; font-size: 11px; }
 button.cal-daynum.is-clickable:hover { background: var(--surface-3); color: var(--text); }
 .cal-cell.is-today button.cal-daynum.is-clickable:hover { background: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .cal-grid.is-day { grid-template-columns: minmax(0, 1fr); width: 100%; max-width: 620px; margin: 0 auto; }
 .cal-grid.is-day .cal-cell { padding: 12px 14px 13px; }
-.cal-grid.is-day .cal-chip-stack { gap: 4px; overflow-y: auto; }
+.cal-grid.is-day .cal-chip-stack { gap: 4px; }
 .cal-grid.is-day .cal-chip { padding: 8px 11px; border-radius: 9px; font-size: 11.5px; }
 .cal-grid.is-day .cal-chip-dot { width: 7px; height: 7px; }
 .cal-day-empty { padding: 14px 4px; color: var(--text-faint); font-size: 11px; line-height: 1.5; }
@@ -492,6 +496,7 @@ button.cal-daynum.is-clickable:hover { background: var(--surface-3); color: var(
 .cal-year-month h3 { margin: 0 0 9px; padding-left: 2px; font: 600 14px/1.2 'Manrope', sans-serif; letter-spacing: -.02em; }
 .cal-year-month .cal-weekday-row { padding-bottom: 5px; }
 .cal-grid.is-month-block { flex: none; grid-auto-rows: minmax(92px, auto); }
+.cal-grid.is-month-block .cal-chip-stack { max-height: 96px; }
 .cal-cell.is-blank { background: color-mix(in srgb, var(--surface) 30%, var(--workspace)); }
 .cal-tray { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 18px 14px 14px; border-left: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 55%, transparent); transition: box-shadow 140ms ease; }
 .cal-tray.is-drag-over { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }

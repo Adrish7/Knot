@@ -1,5 +1,6 @@
 import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Flag, Plus, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { sortFocusDay } from '../data'
 import { dateKey, formatDayKey, formatDue, isOverdue, isToday, todayKey } from '../format'
 import type { FocusStatus, Task, TaskList } from '../types'
 
@@ -7,8 +8,8 @@ interface CalendarPageProps {
   tasks: Task[]
   lists: TaskList[]
   onOpenTask: (taskId: string) => void
-  onAddFocusDate: (taskId: string, day: string) => void
-  onMoveFocusDate: (taskId: string, fromDay: string, toDay: string) => void
+  onAddFocusDate: (taskId: string, day: string, beforeTaskId: string | null) => void
+  onMoveFocusDate: (taskId: string, fromDay: string, toDay: string, beforeTaskId: string | null) => void
   onRemoveFocusDate: (taskId: string, day: string) => void
   onSetFocusStatus: (taskId: string, day: string, status: FocusStatus | null) => void
   onAddTaskOnDay: (day: string, title: string) => void
@@ -22,8 +23,12 @@ interface DragInfo {
   fromDay: string | null // null when dragging from the tray or a deadline chip: drop adds a focus day
 }
 
+interface DropHint {
+  target: string // day key, or 'tray'
+  beforeTaskId: string | null // the planned task the drop lands above; null means the end of the day
+}
+
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const MONTH_MAX_CHIPS = 4
 const YEAR_MONTHS_BACK = 12
 const YEAR_MONTHS_FORWARD = 24
 
@@ -54,7 +59,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
   const [view, setView] = useState<CalView>('month')
   const [cursor, setCursor] = useState(() => new Date())
   const [drag, setDrag] = useState<DragInfo | null>(null)
-  const [dragOver, setDragOver] = useState<string | null>(null) // day key, or 'tray'
+  const [dropHint, setDropHint] = useState<DropHint | null>(null)
   const [quickAddDay, setQuickAddDay] = useState<string | null>(null)
   const [quickTitle, setQuickTitle] = useState('')
   const [trayTitle, setTrayTitle] = useState('')
@@ -98,6 +103,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
         if (!task.focusDates.includes(key)) entry(key).due.push(task)
       }
     }
+    for (const [key, value] of map) value.focus = sortFocusDay(value.focus, key)
     return map
   }, [tasks])
 
@@ -180,15 +186,42 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
 
   const endDrag = () => {
     setDrag(null)
-    setDragOver(null)
+    setDropHint(null)
+  }
+
+  // The planned chip the cursor would insert above: the first one (skipping the dragged task)
+  // whose vertical midpoint is below the cursor. Null means "after the last one".
+  const findBeforeTask = (cell: HTMLElement, clientY: number, taskId: string) => {
+    for (const chip of cell.querySelectorAll<HTMLElement>('.cal-chip[data-focus-task]')) {
+      const id = chip.dataset.focusTask
+      if (!id || id === taskId) continue
+      const bounds = chip.getBoundingClientRect()
+      if (clientY < bounds.top + bounds.height / 2) return id
+    }
+    return null
+  }
+
+  const dragOverDay = (event: React.DragEvent, day: string) => {
+    if (!drag) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = drag.fromDay && !event.altKey ? 'move' : 'copy'
+    const beforeTaskId = findBeforeTask(event.currentTarget as HTMLElement, event.clientY, drag.taskId)
+    setDropHint((current) => current?.target === day && current.beforeTaskId === beforeTaskId ? current : { target: day, beforeTaskId })
+  }
+
+  const dragLeaveDay = (event: React.DragEvent, day: string) => {
+    const nextTarget = event.relatedTarget
+    if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+      setDropHint((current) => current?.target === day ? null : current)
+    }
   }
 
   const dropOnDay = (event: React.DragEvent, day: string) => {
     event.preventDefault()
     if (!drag) return
-    if (drag.fromDay === day) return endDrag()
-    if (drag.fromDay && !event.altKey) onMoveFocusDate(drag.taskId, drag.fromDay, day)
-    else onAddFocusDate(drag.taskId, day)
+    const beforeTaskId = findBeforeTask(event.currentTarget as HTMLElement, event.clientY, drag.taskId)
+    if (drag.fromDay && (drag.fromDay === day || !event.altKey)) onMoveFocusDate(drag.taskId, drag.fromDay, day, beforeTaskId)
+    else onAddFocusDate(drag.taskId, day, beforeTaskId)
     endDrag()
   }
 
@@ -199,7 +232,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
     setQuickAddDay(null)
   }
 
-  const renderChip = (task: Task, day: string, kind: 'focus' | 'due') => {
+  const renderChip = (task: Task, day: string, kind: 'focus' | 'due', dropEdge: 'before' | 'after' | null) => {
     const list = task.listId ? listById.get(task.listId) : undefined
     const dueHere = task.dueAt ? dateKey(new Date(task.dueAt)) === day : false
     const dragging = drag?.taskId === task.id && drag.fromDay === (kind === 'focus' ? day : null)
@@ -209,8 +242,9 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
     return (
       <div
         key={`${task.id}:${kind}`}
-        className={`cal-chip ${kind === 'due' ? 'is-due' : ''} ${task.completed ? 'is-done' : ''} ${status === 'done' ? 'is-day-done' : ''} ${status === 'missed' ? 'is-day-missed' : ''} ${dragging ? 'is-dragging' : ''}`}
+        className={`cal-chip ${kind === 'due' ? 'is-due' : ''} ${task.completed ? 'is-done' : ''} ${status === 'done' ? 'is-day-done' : ''} ${status === 'missed' ? 'is-day-missed' : ''} ${dragging ? 'is-dragging' : ''} ${dropEdge ? `drop-${dropEdge}` : ''}`}
         style={{ '--chip-color': list?.color ?? 'var(--accent)' } as React.CSSProperties}
+        data-focus-task={kind === 'focus' ? task.id : undefined}
         role="button"
         tabIndex={0}
         draggable={!task.completed}
@@ -246,25 +280,32 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
     )
   }
 
-  const renderDayCell = (date: Date, options: { outside?: boolean; blank?: boolean; maxChips: number; dayView?: boolean }) => {
+  const renderDayCell = (date: Date, options: { outside?: boolean; blank?: boolean; dayView?: boolean }) => {
     const key = dateKey(date)
     if (options.blank) return <div key={`blank-${key}`} className="cal-cell is-blank" />
     const cell = byDay.get(key)
+    const focus = cell?.focus ?? []
     const chips = [
-      ...(cell?.focus ?? []).map((task) => ({ task, kind: 'focus' as const })),
+      ...focus.map((task) => ({ task, kind: 'focus' as const })),
       ...(cell?.due ?? []).map((task) => ({ task, kind: 'due' as const })),
     ]
+    const hint = dropHint?.target === key ? dropHint : null
+    const reordering = Boolean(hint && drag?.fromDay === key)
+    // Which edge of a planned chip the guide line sits on: above the chip the drop lands before,
+    // or below the last chip (other than the dragged one) when it lands at the end.
+    const lastOther = hint && hint.beforeTaskId === null ? [...focus].reverse().find((task) => task.id !== drag?.taskId) : undefined
+    const edgeFor = (task: Task, kind: 'focus' | 'due') => {
+      if (!hint || kind !== 'focus') return null
+      if (hint.beforeTaskId === task.id) return 'before' as const
+      if (lastOther?.id === task.id) return 'after' as const
+      return null
+    }
     return (
       <div
         key={key}
-        className={`cal-cell ${options.outside ? 'is-outside' : ''} ${key === today ? 'is-today' : ''} ${dragOver === key ? 'is-drag-over' : ''} ${drag && dragDueDay === key ? 'is-due-day' : ''}`}
-        onDragOver={(event) => {
-          if (!drag) return
-          event.preventDefault()
-          event.dataTransfer.dropEffect = drag.fromDay && !event.altKey ? 'move' : 'copy'
-          setDragOver(key)
-        }}
-        onDragLeave={() => setDragOver((current) => current === key ? null : current)}
+        className={`cal-cell ${options.outside ? 'is-outside' : ''} ${key === today ? 'is-today' : ''} ${hint && !reordering ? 'is-drag-over' : ''} ${drag && dragDueDay === key ? 'is-due-day' : ''}`}
+        onDragOver={(event) => dragOverDay(event, key)}
+        onDragLeave={(event) => dragLeaveDay(event, key)}
         onDrop={(event) => dropOnDay(event, key)}
       >
         <div className="cal-cell-head">
@@ -275,10 +316,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
           <button className="cal-add" onClick={() => { setQuickAddDay(key); setQuickTitle('') }} aria-label={`New task on ${key}`}><Plus size={13} /></button>
         </div>
         <div className="cal-chip-stack">
-          {chips.slice(0, options.maxChips).map(({ task, kind }) => renderChip(task, key, kind))}
-          {chips.length > options.maxChips && (
-            <button className="cal-more" onClick={() => openDay(date)}>+{chips.length - options.maxChips} more</button>
-          )}
+          {chips.map(({ task, kind }) => renderChip(task, key, kind, edgeFor(task, kind)))}
           {options.dayView && chips.length === 0 && quickAddDay !== key && (
             <div className="cal-day-empty">Nothing planned. Drag a task here, or press the plus to add one.</div>
           )}
@@ -339,7 +377,6 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
                 <div className="cal-grid is-month-block">
                   {monthGridDays(monthDate).map((date) => renderDayCell(date, {
                     blank: date.getMonth() !== monthDate.getMonth(),
-                    maxChips: MONTH_MAX_CHIPS,
                   }))}
                 </div>
               </section>
@@ -349,7 +386,6 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
           <div className={`cal-grid ${view === 'week' ? 'is-week' : ''} ${view === 'day' ? 'is-day' : ''}`}>
             {days.map((date) => renderDayCell(date, {
               outside: view === 'month' && date.getMonth() !== cursor.getMonth(),
-              maxChips: view === 'month' ? MONTH_MAX_CHIPS : Number.POSITIVE_INFINITY,
               dayView: view === 'day',
             }))}
           </div>
@@ -357,16 +393,16 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
       </div>
 
       <aside
-        className={`cal-tray ${dragOver === 'tray' ? 'is-drag-over' : ''} ${trayListColor ? 'is-accented' : ''}`}
+        className={`cal-tray ${dropHint?.target === 'tray' ? 'is-drag-over' : ''} ${trayListColor ? 'is-accented' : ''}`}
         style={trayListColor ? { '--list-accent': trayListColor } as React.CSSProperties : undefined}
         aria-label="Tasks"
         onDragOver={(event) => {
           if (!drag?.fromDay) return
           event.preventDefault()
           event.dataTransfer.dropEffect = 'move'
-          setDragOver('tray')
+          setDropHint((current) => current?.target === 'tray' ? current : { target: 'tray', beforeTaskId: null })
         }}
-        onDragLeave={() => setDragOver((current) => current === 'tray' ? null : current)}
+        onDragLeave={() => setDropHint((current) => current?.target === 'tray' ? null : current)}
         onDrop={(event) => {
           event.preventDefault()
           if (drag?.fromDay) onRemoveFocusDate(drag.taskId, drag.fromDay)
@@ -423,7 +459,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
             </div>
           )}
         </div>
-        <p className="cal-tray-hint">Drag tasks onto a day. ⌥-drag a chip to add another day. Drop a chip here to unplan it.</p>
+        <p className="cal-tray-hint">Drag tasks onto a day, or up and down within it to reorder. ⌥-drag a chip to add another day. Drop a chip here to unplan it.</p>
       </aside>
     </main>
   )

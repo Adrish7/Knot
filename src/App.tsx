@@ -8,7 +8,7 @@ import { ConfirmModal, CreateListModal, RenameListModal } from './components/Mod
 import { Sidebar } from './components/Sidebar'
 import { TaskPanel } from './components/TaskPanel'
 import { Trash } from './components/Trash'
-import { createSeedData, createTask, nextOccurrence, normalizeData, palette, uid } from './data'
+import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sortFocusDay, uid } from './data'
 import { isToday, todayKey } from './format'
 import type { DeletedTask, FocusStatus, KnotData, Task, TaskList, ThemeMode, ViewId } from './types'
 
@@ -206,6 +206,9 @@ function App() {
       if (patch.focusDates && !patch.focusStatus) {
         next.focusStatus = Object.fromEntries(Object.entries(next.focusStatus).filter(([day]) => next.focusDates.includes(day)))
       }
+      if (patch.focusDates && !patch.focusOrder) {
+        next.focusOrder = Object.fromEntries(Object.entries(next.focusOrder).filter(([day]) => next.focusDates.includes(day)))
+      }
       return [next]
     }),
   }))
@@ -214,24 +217,53 @@ function App() {
     setData((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === taskId ? { ...task, ...patch(task) } : task) }))
   }
 
-  const addFocusDate = (taskId: string, day: string) => patchFocus(taskId, (task) => ({ focusDates: [...new Set([...task.focusDates, day])].sort() }))
+  // Puts a task on `day` (adding it, or moving it there from `fromDay`) at the position in that
+  // day's list given by `beforeTaskId` — null appends, undefined keeps the task's current slot.
+  // Every task planned on that day then gets an explicit position so the order sticks.
+  const placeFocus = (taskId: string, day: string, fromDay: string | null, beforeTaskId: string | null | undefined) => setData((current) => {
+    const moving = current.tasks.find((task) => task.id === taskId)
+    if (!moving) return current
+    let placed = moving
+    if (fromDay && fromDay !== day) {
+      const { [fromDay]: status, ...focusStatus } = moving.focusStatus
+      const { [fromDay]: _order, ...focusOrder } = moving.focusOrder
+      placed = {
+        ...moving,
+        focusDates: [...new Set([...moving.focusDates.filter((item) => item !== fromDay), day])].sort(),
+        focusStatus: status ? { ...focusStatus, [day]: status } : focusStatus,
+        focusOrder,
+      }
+    } else if (!moving.focusDates.includes(day)) {
+      placed = { ...moving, focusDates: [...moving.focusDates, day].sort() }
+    }
+    const ordered = sortFocusDay(current.tasks.filter((task) => task.focusDates.includes(day)), day)
+    const currentIndex = ordered.findIndex((task) => task.id === taskId)
+    const peers = ordered.filter((task) => task.id !== taskId)
+    const rawIndex = beforeTaskId === undefined ? currentIndex : beforeTaskId === null ? peers.length : peers.findIndex((task) => task.id === beforeTaskId)
+    peers.splice(rawIndex < 0 ? peers.length : rawIndex, 0, placed)
+    const orderOf = new Map(peers.map((task, position) => [task.id, position]))
+    return {
+      ...current,
+      tasks: current.tasks.map((task) => {
+        const next = task.id === taskId ? placed : task
+        const position = orderOf.get(next.id)
+        return position === undefined ? next : { ...next, focusOrder: { ...next.focusOrder, [day]: position } }
+      }),
+    }
+  })
+  const addFocusDate = (taskId: string, day: string, beforeTaskId?: string | null) => placeFocus(taskId, day, null, beforeTaskId)
+  const moveFocusDate = (taskId: string, fromDay: string, toDay: string, beforeTaskId?: string | null) => placeFocus(taskId, toDay, fromDay, beforeTaskId)
   const removeFocusDate = (taskId: string, day: string) => setData((current) => ({
     ...current,
     tasks: current.tasks.flatMap((task) => {
       if (task.id !== taskId) return [task]
       const focusDates = task.focusDates.filter((item) => item !== day)
       if (task.listId === null && focusDates.length === 0) return []
-      const { [day]: _removed, ...focusStatus } = task.focusStatus
-      return [{ ...task, focusDates, focusStatus }]
+      const { [day]: _removedStatus, ...focusStatus } = task.focusStatus
+      const { [day]: _removedOrder, ...focusOrder } = task.focusOrder
+      return [{ ...task, focusDates, focusStatus, focusOrder }]
     }),
   }))
-  const moveFocusDate = (taskId: string, fromDay: string, toDay: string) => patchFocus(taskId, (task) => {
-    const { [fromDay]: moved, ...focusStatus } = task.focusStatus
-    return {
-      focusDates: [...new Set([...task.focusDates.filter((item) => item !== fromDay), toDay])].sort(),
-      focusStatus: moved ? { ...focusStatus, [toDay]: moved } : focusStatus,
-    }
-  })
   const setFocusStatus = (taskId: string, day: string, status: FocusStatus | null) => patchFocus(taskId, (task) => {
     const { [day]: _removed, ...focusStatus } = task.focusStatus
     return { focusStatus: status ? { ...focusStatus, [day]: status } : focusStatus }
@@ -287,7 +319,7 @@ function App() {
         const nextReminder = source.reminderAt ? nextOccurrence(source.reminderAt, source.recurrence) : null
         const alreadyCreated = tasks.some((task) => task.id !== source.id && !task.completed && task.listId === source.listId && task.dueAt === nextDue && task.title === source.title && task.recurrence === source.recurrence)
         if (!alreadyCreated) {
-          const next: Task = { ...source, id: uid('task'), dueAt: nextDue, focusDates: [], focusStatus: {}, reminderAt: nextReminder, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: tasks.filter((task) => task.listId === source.listId).length, subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })) }
+          const next: Task = { ...source, id: uid('task'), dueAt: nextDue, focusDates: [], focusStatus: {}, focusOrder: {}, reminderAt: nextReminder, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: tasks.filter((task) => task.listId === source.listId).length, subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })) }
           tasks.push(next)
         }
       }

@@ -34,6 +34,16 @@ function dayKey(daysFromNow: number) {
   return dateKey(date)
 }
 
+// Tasks planned on `day`, in the order the user arranged them; tasks never
+// reordered keep their original relative order after the arranged ones.
+export function sortFocusDay(tasks: Task[], day: string): Task[] {
+  const position = (task: Task) => task.focusOrder[day] ?? Number.POSITIVE_INFINITY
+  return [...tasks].sort((a, b) => {
+    const [left, right] = [position(a), position(b)]
+    return left === right ? 0 : left - right
+  })
+}
+
 export function createTask(listId: string | null, title: string, sortOrder: number): Task {
   return {
     id: uid('task'),
@@ -43,6 +53,7 @@ export function createTask(listId: string | null, title: string, sortOrder: numb
     dueAt: null,
     focusDates: [],
     focusStatus: {},
+    focusOrder: {},
     reminderAt: null,
     recurrence: 'none',
     starred: false,
@@ -182,6 +193,7 @@ function normalizeTask(candidate: Record<string, unknown>, listId: string | null
     dueAt: nullableIso(candidate.dueAt),
     focusDates,
     focusStatus: normalizeFocusStatus(candidate.focusStatus, focusDates),
+    focusOrder: normalizeFocusOrder(candidate.focusOrder, focusDates),
     reminderAt: nullableIso(candidate.reminderAt),
     recurrence,
     starred: Boolean(candidate.starred),
@@ -207,6 +219,16 @@ function normalizeFocusStatus(value: unknown, focusDates: string[]): Record<stri
   for (const day of focusDates) {
     const status = value[day]
     if (status === 'done' || status === 'missed') result[day] = status
+  }
+  return result
+}
+
+function normalizeFocusOrder(value: unknown, focusDates: string[]): Record<string, number> {
+  if (!isRecord(value)) return {}
+  const result: Record<string, number> = {}
+  for (const day of focusDates) {
+    const order = value[day]
+    if (typeof order === 'number' && Number.isFinite(order)) result[day] = order
   }
   return result
 }
