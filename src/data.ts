@@ -51,6 +51,16 @@ export function sortFocusDay(tasks: Task[], day: string): Task[] {
   })
 }
 
+// Starred tasks in the order the user arranged them on the Starred page; never-arranged
+// tasks keep their original relative order after the arranged ones.
+export function sortStarred(tasks: Task[]): Task[] {
+  const position = (task: Task) => task.starredOrder ?? Number.POSITIVE_INFINITY
+  return [...tasks].sort((a, b) => {
+    const [left, right] = [position(a), position(b)]
+    return left === right ? 0 : left - right
+  })
+}
+
 export function createTask(listId: string | null, title: string, sortOrder: number): Task {
   return {
     id: uid('task'),
@@ -61,6 +71,7 @@ export function createTask(listId: string | null, title: string, sortOrder: numb
     focusDates: [],
     focusStatus: {},
     focusOrder: {},
+    starredOrder: null,
     reminderAt: null,
     recurrence: 'none',
     starred: false,
@@ -200,7 +211,8 @@ function normalizeTask(candidate: Record<string, unknown>, listId: string | null
     dueAt: nullableIso(candidate.dueAt),
     focusDates,
     focusStatus: normalizeFocusStatus(candidate.focusStatus, focusDates),
-    focusOrder: normalizeFocusOrder(candidate.focusOrder, focusDates),
+    focusOrder: normalizeFocusOrder(candidate.focusOrder),
+    starredOrder: typeof candidate.starredOrder === 'number' && Number.isFinite(candidate.starredOrder) ? candidate.starredOrder : null,
     reminderAt: nullableIso(candidate.reminderAt),
     recurrence,
     starred: Boolean(candidate.starred),
@@ -230,12 +242,13 @@ function normalizeFocusStatus(value: unknown, focusDates: string[]): Record<stri
   return result
 }
 
-function normalizeFocusOrder(value: unknown, focusDates: string[]): Record<string, number> {
+// Day positions are kept for any valid day, not only planned ones: a task due today can be
+// arranged on the Today page without being planned onto today in the calendar.
+function normalizeFocusOrder(value: unknown): Record<string, number> {
   if (!isRecord(value)) return {}
   const result: Record<string, number> = {}
-  for (const day of focusDates) {
-    const order = value[day]
-    if (typeof order === 'number' && Number.isFinite(order)) result[day] = order
+  for (const [day, order] of Object.entries(value)) {
+    if (DAY_KEY_PATTERN.test(day) && typeof order === 'number' && Number.isFinite(order)) result[day] = order
   }
   return result
 }

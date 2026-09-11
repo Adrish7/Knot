@@ -27,9 +27,13 @@ interface BoardProps {
   onRenameList: (listId: string, name: string) => void
   onListMenu: (list: TaskList, anchor: HTMLElement) => void
   onMoveTask: (taskId: string, targetListId: string, beforeTaskId?: string) => void
+  onReorderTask?: (taskId: string, beforeTaskId: string | null) => void // smart pages with their own manual order
   onMoveList: (listId: string, beforeListId?: string) => void
   onCreateList: () => void
 }
+
+// Drop-target key for smart pages (Today, Starred), which reorder within the page instead of a list.
+const VIEW_DROP_KEY = 'view'
 
 function sortTasks(tasks: Task[], mode: SortMode) {
   return [...tasks].sort((a, b) => {
@@ -94,7 +98,8 @@ export function Board(props: BoardProps) {
     const taskId = draggedTask || event.dataTransfer.getData('text/plain')
     if (taskId) {
       const beforeTaskId = findBeforeTask(event.currentTarget as HTMLElement, event.clientY, taskId)
-      props.onMoveTask(taskId, listId, beforeTaskId ?? undefined)
+      if (listId === VIEW_DROP_KEY) props.onReorderTask?.(taskId, beforeTaskId)
+      else props.onMoveTask(taskId, listId, beforeTaskId ?? undefined)
     }
     finishDrag()
   }
@@ -208,10 +213,14 @@ export function Board(props: BoardProps) {
   }
 
   const activeList = activeListId ? lists.find((list) => list.id === activeListId) : null
-  const selected = sortTasks(tasks, sortMode)
+  const reorderable = mode === 'smart' && Boolean(props.onReorderTask)
+  // Smart pages arrive already in their own manual order; only re-sort them for the other modes.
+  const selected = reorderable && sortMode === 'manual' ? tasks : sortTasks(tasks, sortMode)
   const open = selected.filter((task) => !task.completed)
   const complete = selected.filter((task) => task.completed)
   const defaultListId = activeList?.id ?? lists[0]?.id
+  const dropKey = mode === 'list' ? defaultListId : reorderable ? VIEW_DROP_KEY : undefined
+  const draggable = sortMode === 'manual' && (mode === 'list' || reorderable)
 
   return (
     <main className="content-area focus-scroll">
@@ -220,9 +229,9 @@ export function Board(props: BoardProps) {
 
         <div
           className="focus-tasks"
-          onDragOver={(event) => defaultListId && dragOverList(event, defaultListId)}
-          onDragLeave={(event) => defaultListId && dragLeaveList(event, defaultListId)}
-          onDrop={(event) => defaultListId && dropOnList(event, defaultListId)}
+          onDragOver={(event) => dropKey && dragOverList(event, dropKey)}
+          onDragLeave={(event) => dropKey && dragLeaveList(event, dropKey)}
+          onDrop={(event) => dropKey && dropOnList(event, dropKey)}
         >
           {open.map((task) => (
             <TaskItem
@@ -235,9 +244,9 @@ export function Board(props: BoardProps) {
               onStar={props.onStarTask} onDelete={props.onDeleteTask}
               onSetDue={props.onSetDueTask}
               onRename={props.onRenameTask}
-              onDragStart={sortMode === 'manual' && mode === 'list' ? startDrag : undefined}
+              onDragStart={draggable ? startDrag : undefined}
               onDragEnd={finishDrag}
-              dropEdge={defaultListId ? edgeFor(defaultListId, open, task) : null}
+              dropEdge={dropKey ? edgeFor(dropKey, open, task) : null}
             />
           ))}
         </div>

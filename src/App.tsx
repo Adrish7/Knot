@@ -9,7 +9,7 @@ import { Sidebar } from './components/Sidebar'
 import { TaskPanel } from './components/TaskPanel'
 import { ListRing, listProgress } from './components/ListRing'
 import { Trash } from './components/Trash'
-import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sortFocusDay, uid } from './data'
+import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sortFocusDay, sortStarred, uid } from './data'
 import { isToday, todayKey } from './format'
 import type { DeletedTask, FocusStatus, KnotData, Task, TaskList, ThemeMode, ViewId } from './types'
 
@@ -148,8 +148,8 @@ function App() {
     let tasks = data.tasks.filter((task) => task.listId !== null)
     if (needle) return tasks.filter((task) => `${task.title} ${task.notes} ${task.subtasks.map((item) => item.title).join(' ')}`.toLowerCase().includes(needle))
     tasks = tasks.filter((task) => !task.completed)
-    if (selectedView === 'today') tasks = tasks.filter((task) => isToday(task.dueAt) || task.focusDates.includes(todayKey()))
-    else if (selectedView === 'starred') tasks = tasks.filter((task) => task.starred)
+    if (selectedView === 'today') tasks = sortFocusDay(tasks.filter((task) => isToday(task.dueAt) || task.focusDates.includes(todayKey())), todayKey())
+    else if (selectedView === 'starred') tasks = sortStarred(tasks.filter((task) => task.starred))
     else if (selectedView.startsWith('list:')) tasks = tasks.filter((task) => task.listId === selectedView.slice(5))
     return tasks
   }, [clockTick, data.tasks, query, selectedView])
@@ -214,9 +214,7 @@ function App() {
       if (patch.focusDates && !patch.focusStatus) {
         next.focusStatus = Object.fromEntries(Object.entries(next.focusStatus).filter(([day]) => next.focusDates.includes(day)))
       }
-      if (patch.focusDates && !patch.focusOrder) {
-        next.focusOrder = Object.fromEntries(Object.entries(next.focusOrder).filter(([day]) => next.focusDates.includes(day)))
-      }
+      if (patch.starred === false) next.starredOrder = null
       return [next]
     }),
   }))
@@ -260,6 +258,29 @@ function App() {
     }
   })
   const addFocusDate = (taskId: string, day: string, beforeTaskId?: string | null) => placeFocus(taskId, day, null, beforeTaskId)
+
+  // Drag-to-reorder on the Today and Starred pages. The moved task lands before `beforeTaskId`
+  // (null appends) and every task on the page gets an explicit position so the order sticks.
+  const reorderView = (
+    taskId: string,
+    beforeTaskId: string | null,
+    members: (task: Task) => boolean,
+    ordered: (tasks: Task[]) => Task[],
+    place: (task: Task, position: number) => Task,
+  ) => setData((current) => {
+    const moving = current.tasks.find((task) => task.id === taskId)
+    if (!moving || !members(moving)) return current
+    const peers = ordered(current.tasks.filter((task) => task.listId !== null && !task.completed && members(task))).filter((task) => task.id !== taskId)
+    const rawIndex = beforeTaskId === null ? peers.length : peers.findIndex((task) => task.id === beforeTaskId)
+    peers.splice(rawIndex < 0 ? peers.length : rawIndex, 0, moving)
+    const orderOf = new Map(peers.map((task, position) => [task.id, position]))
+    return { ...current, tasks: current.tasks.map((task) => { const position = orderOf.get(task.id); return position === undefined ? task : place(task, position) }) }
+  })
+  const reorderToday = (taskId: string, beforeTaskId: string | null) => {
+    const today = todayKey()
+    reorderView(taskId, beforeTaskId, (task) => isToday(task.dueAt) || task.focusDates.includes(today), (tasks) => sortFocusDay(tasks, today), (task, position) => ({ ...task, focusOrder: { ...task.focusOrder, [today]: position } }))
+  }
+  const reorderStarred = (taskId: string, beforeTaskId: string | null) => reorderView(taskId, beforeTaskId, (task) => task.starred, sortStarred, (task, position) => ({ ...task, starredOrder: position }))
   const moveFocusDate = (taskId: string, fromDay: string, toDay: string, beforeTaskId?: string | null) => placeFocus(taskId, toDay, fromDay, beforeTaskId)
   const removeFocusDate = (taskId: string, day: string) => setData((current) => ({
     ...current,
@@ -573,6 +594,7 @@ function App() {
           onRenameList={renameListById}
           onListMenu={openListMenu}
           onMoveTask={moveTask}
+          onReorderTask={searching ? undefined : selectedView === 'today' ? reorderToday : selectedView === 'starred' ? reorderStarred : undefined}
           onMoveList={moveList}
           onCreateList={() => setCreateListOpen(true)}
         />}
