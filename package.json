@@ -56,7 +56,7 @@
     },
     "dmg": {
       "title": "Knot",
-      "backgroundColor": "#f2f0e9",
+      "backgroundColor": "#f3f3f5",
       "window": {
         "width": 560,
         "height": 380

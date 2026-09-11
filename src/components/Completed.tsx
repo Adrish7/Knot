@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleDashed, Clock3, RotateCcw, Trash2 } from 'lucide-react'
+import { CheckCircle2, Clock3, RotateCcw, Trash2 } from 'lucide-react'
 import { timeAgo } from '../format'
 import type { Task, TaskList } from '../types'
 
@@ -18,17 +18,13 @@ export function Completed({ tasks, lists, onOpen, onReopen, onDelete, onClear }:
     <main className="content-area focus-scroll">
       <section className="focus-sheet">
         <div className="focus-summary">
-          <div className="summary-mark"><CheckCircle2 size={20} /></div>
-          <div>
-            <span>{sorted.length === 0 ? 'Nothing yet' : `${sorted.length} completed ${sorted.length === 1 ? 'task' : 'tasks'}`}</span>
-            <p className="archive-note">Completed tasks move here and out of their lists. Reopen one to put it back.</p>
-          </div>
+          <div><p className="archive-note">Completed tasks leave their lists and land here. Reopen one to put it back.</p></div>
           {sorted.length > 0 && <button className="sheet-action" onClick={onClear}>Clear all</button>}
         </div>
 
         {sorted.length === 0 ? (
           <div className="large-empty">
-            <div className="empty-rings"><CircleDashed /><CheckCircle2 /></div>
+            <div className="empty-mark" style={{ '--page-color': 'var(--c-done)' } as React.CSSProperties}><CheckCircle2 /></div>
             <h2>Nothing completed yet</h2>
             <p>Tick a task off and it will land here.</p>
           </div>

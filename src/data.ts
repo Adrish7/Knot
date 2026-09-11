@@ -3,7 +3,14 @@ import type { DeletedTask, FocusStatus, KnotData, Preferences, Recurrence, Subta
 
 export const TRASH_RETENTION_DAYS = 30
 
-export const palette = ['#6d8a64', '#b3714e', '#5f81a6', '#9d6f98', '#b16a7c', '#4f8f86', '#ab8d52', '#8f8a4e', '#a85c50', '#7379a8', '#8d7b68', '#6f7f88']
+export const palette = ['#e5484d', '#f76b15', '#e0a100', '#30a46c', '#12a594', '#0c9cc4', '#3b82f6', '#5b5bd6', '#8e4ec6', '#d6409f', '#a07553', '#64748b']
+// Colours from the retired 2026-07 palette map onto the current palette by position, so lists
+// created under the old look pick up their equivalent colour without any other data change.
+const retiredPalette = ['#6d8a64', '#b3714e', '#5f81a6', '#9d6f98', '#b16a7c', '#4f8f86', '#ab8d52', '#8f8a4e', '#a85c50', '#7379a8', '#8d7b68', '#6f7f88']
+function currentColor(color: string) {
+  const index = retiredPalette.indexOf(color.toLowerCase())
+  return index === -1 ? color : palette[index]
+}
 const recurrences: Recurrence[] = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly']
 const sortModes: Preferences['sortMode'][] = ['manual', 'date', 'starred']
 const themes: Preferences['theme'][] = ['light', 'dark', 'system']
@@ -78,9 +85,9 @@ export function createSeedData(): KnotData {
   return {
     version: 1,
     lists: [
-      { id: focusId, name: 'This week', color: palette[0], createdAt: now, sortOrder: 0 },
-      { id: personalId, name: 'Personal', color: palette[1], createdAt: now, sortOrder: 1 },
-      { id: somedayId, name: 'Ideas', color: palette[2], createdAt: now, sortOrder: 2 },
+      { id: focusId, name: 'This week', color: palette[6], createdAt: now, sortOrder: 0 },
+      { id: personalId, name: 'Personal', color: palette[3], createdAt: now, sortOrder: 1 },
+      { id: somedayId, name: 'Ideas', color: palette[8], createdAt: now, sortOrder: 2 },
     ],
     tasks: [
       make(focusId, 'Shape the week', 0, {
@@ -116,7 +123,7 @@ export function normalizeData(value: unknown): KnotData | null {
     return [{
       id: candidate.id,
       name: cleanText(candidate.name) || 'Untitled list',
-      color: cleanText(candidate.color) || palette[index % palette.length],
+      color: currentColor(cleanText(candidate.color)) || palette[index % palette.length],
       createdAt: validIso(candidate.createdAt) || now,
       sortOrder: finiteNumber(candidate.sortOrder, index),
     }]

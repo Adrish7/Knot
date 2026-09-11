@@ -17,17 +17,13 @@ export function Trash({ entries, onRestore, onPurge, onEmpty }: TrashProps) {
     <main className="content-area focus-scroll">
       <section className="focus-sheet">
         <div className="focus-summary">
-          <div className="summary-mark is-danger"><Trash2 size={20} /></div>
-          <div>
-            <span>{sorted.length === 0 ? 'Nothing here' : `${sorted.length} deleted ${sorted.length === 1 ? 'task' : 'tasks'}`}</span>
-            <p className="archive-note">Tasks are kept for {TRASH_RETENTION_DAYS} days, then removed for good.</p>
-          </div>
+          <div><p className="archive-note">Deleted tasks are kept for {TRASH_RETENTION_DAYS} days, then removed for good.</p></div>
           {sorted.length > 0 && <button className="sheet-action" onClick={onEmpty}>Empty now</button>}
         </div>
 
         {sorted.length === 0 ? (
           <div className="large-empty">
-            <div className="empty-rings"><Trash2 /><Clock3 /></div>
+            <div className="empty-mark" style={{ '--page-color': 'var(--c-trash)' } as React.CSSProperties}><Trash2 /></div>
             <h2>Recently deleted is empty</h2>
             <p>Tasks you delete land here first, so you can put them back.</p>
           </div>

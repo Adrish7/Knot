@@ -1,4 +1,4 @@
-import { CheckCircle2, FolderOpen, Pencil, Plus, Trash2 } from 'lucide-react'
+import { CalendarDays, CheckCircle2, FolderOpen, Inbox, Pencil, Search, Star, Sun, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Board } from './components/Board'
 import { CalendarPage } from './components/CalendarPage'
@@ -7,6 +7,7 @@ import { Header } from './components/Header'
 import { ConfirmModal, CreateListModal, RenameListModal } from './components/Modal'
 import { Sidebar } from './components/Sidebar'
 import { TaskPanel } from './components/TaskPanel'
+import { ListRing, listProgress } from './components/ListRing'
 import { Trash } from './components/Trash'
 import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sortFocusDay, uid } from './data'
 import { isToday, todayKey } from './format'
@@ -117,8 +118,11 @@ function App() {
       }
       if (event.metaKey && event.key.toLowerCase() === 'n') {
         event.preventDefault()
-        const selectedId = selectedView.startsWith('list:') ? selectedView.slice(5) : data.lists[0]?.id
+        if (selectedView === 'completed' || selectedView === 'trash' || selectedView === 'calendar') return
+        const firstListId = [...data.lists].sort((a, b) => a.sortOrder - b.sortOrder)[0]?.id
+        const selectedId = selectedView.startsWith('list:') ? selectedView.slice(5) : firstListId
         if (selectedId) setQuickAddListId(selectedId)
+        else setCreateListOpen(true)
       }
       if (event.key === 'Escape') {
         if (createListOpen || renameList || confirmAction) return
@@ -151,6 +155,7 @@ function App() {
   }, [clockTick, data.tasks, query, selectedView])
 
   const completedTasks = useMemo(() => data.tasks.filter((task) => task.listId !== null && task.completed), [data.tasks])
+  const doneCounts = useMemo(() => completedTasks.reduce<Record<string, number>>((counts, task) => { if (task.listId) counts[task.listId] = (counts[task.listId] ?? 0) + 1; return counts }, {}), [completedTasks])
   const searching = Boolean(query.trim())
   const activeListId = selectedView.startsWith('list:') ? selectedView.slice(5) : null
   const activeList = sortedLists.find((list) => list.id === activeListId)
@@ -158,21 +163,24 @@ function App() {
   const openCountLabel = openDisplayed === 0 ? 'All done' : `${openDisplayed} open ${openDisplayed === 1 ? 'task' : 'tasks'}`
   const calendarOpen = data.tasks.filter((task) => !task.completed).length
   const calendarOpenCountLabel = calendarOpen === 0 ? 'All done' : `${calendarOpen} open ${calendarOpen === 1 ? 'task' : 'tasks'}`
+  const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())
+  const activeListOpen = activeList ? data.tasks.filter((task) => task.listId === activeList.id && !task.completed).length : 0
+  const activeListDone = activeList ? data.tasks.filter((task) => task.listId === activeList.id && task.completed).length : 0
   const page = selectedView === 'completed'
-    ? { title: 'Completed', eyebrow: `${completedTasks.length} ${completedTasks.length === 1 ? 'task' : 'tasks'}`, mode: 'smart' as const }
+    ? { title: 'Completed', icon: <CheckCircle2 />, color: 'var(--c-done)', mode: 'smart' as const }
     : selectedView === 'trash'
-    ? { title: 'Recently deleted', eyebrow: `${data.trash.length} ${data.trash.length === 1 ? 'task' : 'tasks'}`, mode: 'smart' as const }
+    ? { title: 'Recently deleted', icon: <Trash2 />, color: 'var(--c-trash)', mode: 'smart' as const }
     : searching
-    ? { title: 'Search', eyebrow: `${displayedTasks.length} ${displayedTasks.length === 1 ? 'result' : 'results'}`, mode: 'smart' as const }
+    ? { title: 'Search', icon: <Search />, color: 'var(--text-2)', subline: `${displayedTasks.length} ${displayedTasks.length === 1 ? 'result' : 'results'} for “${query.trim()}”`, mode: 'smart' as const }
     : selectedView === 'all'
-      ? { title: 'All tasks', eyebrow: greeting(), mode: 'board' as const }
+      ? { title: 'All tasks', icon: <Inbox />, color: 'var(--c-all)', mode: 'board' as const }
       : selectedView === 'today'
-        ? { title: 'Today', eyebrow: new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date()), mode: 'smart' as const }
+        ? { title: 'Today', icon: <Sun />, color: 'var(--c-today)', subline: todayLabel, mode: 'smart' as const }
         : selectedView === 'calendar'
-        ? { title: 'Calendar', eyebrow: calendarOpenCountLabel, mode: 'smart' as const }
+        ? { title: 'Calendar', icon: <CalendarDays />, color: 'var(--c-calendar)', subline: calendarOpenCountLabel, mode: 'smart' as const }
         : selectedView === 'starred'
-          ? { title: 'Starred', eyebrow: openCountLabel, mode: 'smart' as const }
-          : { title: activeList?.name ?? 'List', eyebrow: openCountLabel, mode: 'list' as const }
+          ? { title: 'Starred', icon: <Star fill="currentColor" />, color: 'var(--c-starred)', mode: 'smart' as const }
+          : { title: activeList?.name ?? 'List', icon: <ListRing color={activeList?.color ?? 'var(--accent)'} progress={listProgress(activeListOpen, activeListDone)} />, color: activeList?.color, subline: openCountLabel, mode: 'list' as const }
 
   const updatePreferences = (patch: Partial<KnotData['preferences']>) => setData((current) => ({ ...current, preferences: { ...current.preferences, ...patch } }))
 
@@ -184,8 +192,8 @@ function App() {
     showToast(`${name} created`)
   }
 
-  const addTask = (listId: string, title: string, openDetails = false) => {
-    const task = createTask(listId, title, 0)
+  const addTask = (listId: string, title: string, openDetails = false, extras: Partial<Task> = {}) => {
+    const task = { ...createTask(listId, title, 0), ...extras }
     setData((current) => ({
       ...current,
       tasks: [...current.tasks, { ...task, sortOrder: newTaskSortOrder(current.tasks, listId) }],
@@ -472,11 +480,10 @@ function App() {
     })
   }
 
-  const cycleTheme = () => {
-    const order: ThemeMode[] = ['system', 'light', 'dark']
-    const next = order[(order.indexOf(data.preferences.theme) + 1) % order.length]
-    updatePreferences({ theme: next })
-    showToast(next === 'system' ? 'Theme follows your Mac' : `${next[0].toUpperCase()}${next.slice(1)} theme`)
+  const setTheme = (theme: ThemeMode) => {
+    if (theme === data.preferences.theme) return
+    updatePreferences({ theme })
+    showToast(theme === 'system' ? 'Appearance follows your Mac' : theme === 'light' ? 'Light appearance' : 'Dark appearance')
   }
 
   const openListMenu = (list: TaskList, anchor: HTMLElement) => {
@@ -488,7 +495,7 @@ function App() {
     setListMenu((current) => current?.list.id === list.id ? null : { list, x, y })
   }
 
-  if (!hydrated) return <div className="splash"><img src="./icon.png" alt="Knot" /><span>Loading…</span></div>
+  if (!hydrated) return <div className="splash"><img src="./icon.png" alt="" /><span>Loading Knot</span></div>
 
   return (
     <div
@@ -504,17 +511,31 @@ function App() {
         completedCount={completedTasks.length}
         trashCount={data.trash.length}
         launchAtLogin={data.preferences.launchAtLogin}
+        theme={data.preferences.theme}
+        query={query}
+        searchRef={searchRef}
+        onQuery={(value) => { setQuery(value); if (value.trim() && (selectedView === 'trash' || selectedView === 'completed')) setSelectedView('all') }}
         onSelect={(view) => { setSelectedView(view); setQuery(''); setQuickAddListId(null) }}
         onCreateList={() => setCreateListOpen(true)}
         onListMenu={openListMenu}
         onRenameList={renameListById}
         onToggle={() => updatePreferences({ sidebarCollapsed: !data.preferences.sidebarCollapsed })}
         onLaunchAtLogin={(launchAtLogin) => { updatePreferences({ launchAtLogin }); showToast(launchAtLogin ? 'Knot will open when you log in' : 'Open at login turned off') }}
+        onTheme={setTheme}
         onUpdate={installUpdate}
         updating={updating}
       />
       <section className="workspace">
-        <Header title={page.title} eyebrow={page.eyebrow} query={query} sortMode={data.preferences.sortMode} theme={data.preferences.theme} onQuery={(value) => { setQuery(value); if (value.trim() && (selectedView === 'trash' || selectedView === 'completed')) setSelectedView('all') }} onSort={(sortMode) => updatePreferences({ sortMode })} onTheme={cycleTheme} onRenameTitle={!searching && activeList ? (name) => renameListById(activeList.id, name) : undefined} searchRef={searchRef} />
+        <Header
+          title={page.title}
+          subline={page.subline}
+          icon={page.icon}
+          color={page.color}
+          sortMode={data.preferences.sortMode}
+          showSort={page.mode !== 'smart' || selectedView === 'today' || selectedView === 'starred'}
+          onSort={(sortMode) => updatePreferences({ sortMode })}
+          onRenameTitle={!searching && activeList ? (name) => renameListById(activeList.id, name) : undefined}
+        />
         {selectedView === 'completed' ? <Completed tasks={completedTasks} lists={sortedLists} onOpen={setSelectedTaskId} onReopen={(taskId) => completeTask(taskId, false)} onDelete={deleteTask} onClear={clearCompleted} />
           : selectedView === 'trash' ? <Trash entries={data.trash} onRestore={restoreTask} onPurge={purgeTask} onEmpty={emptyTrash} />
           : selectedView === 'calendar' && !searching ? <CalendarPage
@@ -532,10 +553,16 @@ function App() {
           lists={sortedLists}
           tasks={displayedTasks}
           activeListId={activeListId}
+          doneCounts={doneCounts}
+          emptyIcon={page.icon}
           sortMode={data.preferences.sortMode}
           quickAddListId={quickAddListId}
+          quickAddEnabled={page.mode === 'list' || (!searching && (selectedView === 'today' || selectedView === 'starred'))}
           onQuickAddList={setQuickAddListId}
-          onAddTask={addTask}
+          onAddTask={(listId, title, openDetails) => addTask(listId, title, openDetails,
+            selectedView === 'today' ? { focusDates: [todayKey()] }
+              : selectedView === 'starred' ? { starred: true }
+              : {})}
           onOpenTask={setSelectedTaskId}
           onCompleteTask={completeTask}
           onToggleSubtask={toggleSubtask}
@@ -570,18 +597,12 @@ function App() {
       )}
 
       {toast && <div className="toast"><CheckCircle2 size={16} />{toast}</div>}
-      {selectedView !== 'trash' && selectedView !== 'completed' && selectedView !== 'calendar' && <button className="floating-add" onClick={() => { const listId = activeListId ?? sortedLists[0]?.id; if (listId) setQuickAddListId(listId); else setCreateListOpen(true) }}><Plus size={20} /><span>New task</span><kbd>⌘N</kbd></button>}
     </div>
   )
 }
 
 function makeTrashEntry(task: Task, lists: TaskList[]): DeletedTask {
   return { task, listName: task.listId === null ? 'Calendar only' : lists.find((list) => list.id === task.listId)?.name ?? 'Untitled list', deletedAt: new Date().toISOString() }
-}
-
-function greeting() {
-  const hour = new Date().getHours()
-  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 }
 
 export default App

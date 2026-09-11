@@ -1,6 +1,7 @@
-import { CheckCircle2, CircleDashed, Inbox, MoreHorizontal, Plus } from 'lucide-react'
+import { CheckCircle2, MoreHorizontal, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { SortMode, Task, TaskList } from '../types'
+import { ListRing, listProgress } from './ListRing'
 import { QuickAdd } from './QuickAdd'
 import { TaskItem, type DropEdge } from './TaskItem'
 
@@ -9,8 +10,11 @@ interface BoardProps {
   lists: TaskList[]
   tasks: Task[]
   activeListId: string | null
+  doneCounts: Record<string, number>
+  emptyIcon?: React.ReactNode
   sortMode: SortMode
   quickAddListId: string | null
+  quickAddEnabled: boolean
   onQuickAddList: (listId: string | null) => void
   onAddTask: (listId: string, title: string, openDetails?: boolean) => void
   onOpenTask: (taskId: string) => void
@@ -184,7 +188,7 @@ export function Board(props: BoardProps) {
               >
               <section className={`list-card is-accented ${dropHint?.listId === list.id ? 'is-drop-target' : ''}`} style={{ '--list-accent': list.color } as React.CSSProperties} onDragOver={(event) => dragOverList(event, list.id)} onDragLeave={(event) => dragLeaveList(event, list.id)} onDrop={(event) => dropOnList(event, list.id)}>
                 <header className="list-card-header" draggable={!draggedTask} onDragStart={(event) => startListDrag(event, list.id)} onDragEnd={finishListDrag}>
-                  <div><span className="color-orb" style={{ background: list.color, color: list.color }} /><EditableListName list={list} onRename={props.onRenameList} /><span className="card-count">{open.length}</span></div>
+                  <div><ListRing color={list.color} progress={listProgress(open.length, props.doneCounts[list.id] ?? 0)} /><EditableListName list={list} onRename={props.onRenameList} /><span className="card-count">{open.length}</span></div>
                   <button className="icon-button small" aria-label={`Options for ${list.name}`} aria-haspopup="menu" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); props.onListMenu(list, event.currentTarget) }}><MoreHorizontal size={16} /></button>
                 </header>
                 <QuickAdd expanded={props.quickAddListId === list.id} onExpand={() => props.onQuickAddList(list.id)} onCancel={() => props.onQuickAddList(null)} onAdd={(title, openDetails) => props.onAddTask(list.id, title, openDetails)} />
@@ -197,7 +201,7 @@ export function Board(props: BoardProps) {
               </div>
             )
           })}
-          <button className="new-list-card" onClick={props.onCreateList}><span><Plus size={20} /></span><strong>New list</strong></button>
+          <button className="new-list-card" onClick={props.onCreateList}><span><Plus size={16} /></span>New list</button>
         </div>
       </main>
     )
@@ -212,14 +216,7 @@ export function Board(props: BoardProps) {
   return (
     <main className="content-area focus-scroll">
       <section className="focus-sheet">
-        <div className="focus-summary">
-          <div className="summary-mark"><Inbox size={22} /></div>
-          <div>
-            <span>{open.length === 0 ? 'All done' : `${open.length} open ${open.length === 1 ? 'task' : 'tasks'}`}</span>
-          </div>
-        </div>
-
-        {defaultListId && mode === 'list' && <QuickAdd expanded={props.quickAddListId === defaultListId} onExpand={() => props.onQuickAddList(defaultListId)} onCancel={() => props.onQuickAddList(null)} onAdd={(title, openDetails) => props.onAddTask(defaultListId, title, openDetails)} />}
+        {defaultListId && props.quickAddEnabled && <QuickAdd expanded={props.quickAddListId === defaultListId} onExpand={() => props.onQuickAddList(defaultListId)} onCancel={() => props.onQuickAddList(null)} onAdd={(title, openDetails) => props.onAddTask(defaultListId, title, openDetails)} />}
 
         <div
           className="focus-tasks"
@@ -247,10 +244,10 @@ export function Board(props: BoardProps) {
 
         {open.length === 0 && (
           <div className="large-empty">
-            <div className="empty-rings"><CircleDashed /><CheckCircle2 /></div>
-            <h2>All clear</h2>
-            <p>{mode === 'list' ? 'No tasks in this list yet.' : 'No tasks match this view.'}</p>
-            {mode === 'list' && defaultListId && <button onClick={() => props.onQuickAddList(defaultListId)}><Plus size={16} />Add a task</button>}
+            <div className="empty-mark">{props.emptyIcon ?? <CheckCircle2 />}</div>
+            <h2>{mode === 'list' ? 'No open tasks' : 'All clear'}</h2>
+            <p>{mode === 'list' ? 'Add a task to this list, or move one here from the board.' : 'Nothing here right now.'}</p>
+            {props.quickAddEnabled && defaultListId && <button onClick={() => props.onQuickAddList(defaultListId)}><Plus size={16} />Add a task</button>}
           </div>
         )}
 

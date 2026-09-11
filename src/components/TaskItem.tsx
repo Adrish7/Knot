@@ -1,6 +1,6 @@
 import { Bell, Calendar, CalendarDays, Check, ChevronDown, ChevronRight, GripVertical, ListTree, Repeat2, Star, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { completedSubtasks, formatDayKey, formatDue, isOverdue, todayKey } from '../format'
+import { completedSubtasks, formatDayKey, formatDue, isOverdue, isToday, todayKey } from '../format'
 import { DateTimePicker } from './DateTimePicker'
 import type { Task } from '../types'
 
@@ -151,9 +151,9 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
           )}
           {!compact && task.notes && <span className="task-notes">{task.notes}</span>}
           <span className="task-meta">
-            {task.dueAt && <span className={isOverdue(task) ? 'overdue' : ''}><Calendar size={12} />{formatDue(task.dueAt)}</span>}
+            {task.dueAt && <span className={isOverdue(task) ? 'overdue' : isToday(task.dueAt) ? 'is-due-today' : ''}><Calendar size={12} />{formatDue(task.dueAt)}</span>}
             {!task.completed && task.focusDates.length > 0 && (
-              <span title={task.focusDates.length === 1 ? 'Focus day' : `${task.focusDates.length} focus days`}>
+              <span className="is-focus" title={task.focusDates.length === 1 ? 'Planned day' : `${task.focusDates.length} planned days`}>
                 <CalendarDays size={12} />
                 {formatDayKey(task.focusDates.find((day) => day >= todayKey()) ?? task.focusDates[task.focusDates.length - 1])}
                 {task.focusDates.length > 1 && ` +${task.focusDates.length - 1}`}
@@ -192,18 +192,17 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
           </div>
         )}
       </div>
-      {onSetDue && !task.completed && (
-        <span className="task-date-field">
-          <DateTimePicker iconTrigger value={task.dueAt} placeholder="Add a date" onChange={(dueAt) => onSetDue(task.id, dueAt)} />
-        </span>
-      )}
-      <button className={`star-button ${task.starred ? 'is-starred' : ''}`} onClick={(event) => { event.stopPropagation(); onStar(task.id) }} aria-label={task.starred ? 'Remove star' : 'Add star'}>
-        <Star size={15} fill={task.starred ? 'currentColor' : 'none'} />
-      </button>
-      <button className="delete-button" onClick={(event) => { event.stopPropagation(); onDelete(task.id) }} aria-label={`Delete ${task.title}`} title="Delete task">
-        <Trash2 size={15} />
-      </button>
-      <button className="task-chevron" onClick={(event) => { event.stopPropagation(); onOpen(task.id) }} aria-label={`Open details for ${task.title}`}><ChevronRight size={15} /></button>
+      <div className="task-actions">
+        {onSetDue && !task.completed && (
+          <DateTimePicker iconTrigger value={task.dueAt} placeholder="Set a due date" onChange={(dueAt) => onSetDue(task.id, dueAt)} />
+        )}
+        <button className={`star-button ${task.starred ? 'is-starred' : ''}`} onClick={(event) => { event.stopPropagation(); onStar(task.id) }} aria-label={task.starred ? 'Remove star' : 'Star task'} title={task.starred ? 'Remove star' : 'Star'}>
+          <Star size={15} fill={task.starred ? 'currentColor' : 'none'} />
+        </button>
+        <button className="delete-button" onClick={(event) => { event.stopPropagation(); onDelete(task.id) }} aria-label={`Delete ${task.title}`} title="Delete">
+          <Trash2 size={15} />
+        </button>
+      </div>
     </article>
   )
 }
