@@ -1,7 +1,7 @@
 import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Flag, Plus, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { sortFocusDay } from '../data'
-import { dateKey, formatDayKey, formatDue, isOverdue, isToday, todayKey } from '../format'
+import { compareByDue, sortFocusDay } from '../data'
+import { dateKey, formatDayKey, formatDue, isForToday, isOverdue, todayKey } from '../format'
 import type { FocusStatus, Task, TaskList } from '../types'
 
 interface CalendarPageProps {
@@ -31,6 +31,10 @@ interface DropHint {
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const YEAR_MONTHS_BACK = 12
 const YEAR_MONTHS_FORWARD = 24
+const monthYear = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' })
+const longDay = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+const monthDay = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+const dayOnly = new Intl.DateTimeFormat(undefined, { day: 'numeric' })
 
 function startOfWeek(date: Date) {
   const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
@@ -109,17 +113,9 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
 
   const trayTasks = useMemo(() => tasks
     .filter((task) => task.listId !== null && !task.completed && (
-      trayList === 'all'
-      || (trayList === 'today'
-        ? isToday(task.dueAt) || task.focusDates.includes(today)
-        : task.listId === trayList)
+      trayList === 'all' || (trayList === 'today' ? isForToday(task) : task.listId === trayList)
     ))
-    .sort((a, b) => {
-      if (!a.dueAt && !b.dueAt) return a.sortOrder - b.sortOrder
-      if (!a.dueAt) return 1
-      if (!b.dueAt) return -1
-      return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()
-    }), [tasks, trayList, today])
+    .sort(compareByDue), [tasks, trayList, today])
 
   const dragTask = drag ? tasks.find((task) => task.id === drag.taskId) : null
   const dragDueDay = dragTask?.dueAt ? dateKey(new Date(dragTask.dueAt)) : null
@@ -127,10 +123,10 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
   const trayListColor = trayList === 'all' || trayList === 'today' ? undefined : listById.get(trayList)?.color
 
   const label = view === 'month' || view === 'year'
-    ? new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(cursor)
+    ? monthYear.format(cursor)
     : view === 'week'
-    ? weekLabel(days[0], days[6])
-    : new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(cursor)
+      ? weekLabel(days[0], days[6])
+      : longDay.format(cursor)
 
   const scrollToMonth = (date: Date, smooth = true) => {
     const container = yearRef.current
@@ -293,7 +289,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
     const reordering = Boolean(hint && drag?.fromDay === key)
     // Which edge of a planned chip the guide line sits on: above the chip the drop lands before,
     // or below the last chip (other than the dragged one) when it lands at the end.
-    const lastOther = hint && hint.beforeTaskId === null ? [...focus].reverse().find((task) => task.id !== drag?.taskId) : undefined
+    const lastOther = hint && hint.beforeTaskId === null ? focus.findLast((task) => task.id !== drag?.taskId) : undefined
     const edgeFor = (task: Task, kind: 'focus' | 'due') => {
       if (!hint || kind !== 'focus') return null
       if (hint.beforeTaskId === task.id) return 'before' as const
@@ -370,7 +366,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
           <div className="cal-year-scroll" ref={yearRef} onScroll={onYearScroll}>
             {yearMonths.map((monthDate) => (
               <section key={monthKey(monthDate)} data-month={monthKey(monthDate)} className="cal-year-month">
-                <h3>{new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(monthDate)}</h3>
+                <h3>{monthYear.format(monthDate)}</h3>
                 <div className="cal-weekday-row">
                   {WEEKDAYS.map((name) => <span key={name}>{name}</span>)}
                 </div>
@@ -520,8 +516,6 @@ function TrayFilter({ value, lists, onChange }: { value: string; lists: TaskList
 }
 
 function weekLabel(start: Date, end: Date) {
-  const monthDay = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
-  const dayOnly = new Intl.DateTimeFormat(undefined, { day: 'numeric' })
   const range = start.getMonth() === end.getMonth() ? `${monthDay.format(start)} – ${dayOnly.format(end)}` : `${monthDay.format(start)} – ${monthDay.format(end)}`
   return `${range}, ${end.getFullYear()}`
 }

@@ -55,32 +55,19 @@ function setLaunchAtLogin(enabled) {
 
 const themeSources = ['light', 'dark', 'system']
 
-// Knot defaults to dark; the window is painted before the renderer loads, so the saved
-// choice (or the default) must reach nativeTheme first to avoid a flash of the wrong ground.
-async function applySavedTheme() {
-  let theme = 'dark'
-  try {
-    const saved = JSON.parse(await fs.promises.readFile(storePath(), 'utf8'))
-    if (themeSources.includes(saved?.preferences?.theme)) theme = saved.preferences.theme
-  } catch (error) {
-    if (error.code !== 'ENOENT') console.error('Could not read the appearance preference:', error)
-  }
-  nativeTheme.themeSource = theme
+// Knot defaults to dark.
+function resolveThemeSource(theme) {
+  return themeSources.includes(theme) ? theme : 'dark'
 }
 
-async function syncLaunchAtLoginPreference() {
-  if (!app.isPackaged || process.platform !== 'darwin') return
-  let enabled = false
+// The saved data, or null when there is none yet. Read once at startup so the theme, login
+// item and reminders can all be set before the window is painted.
+async function readSavedData() {
   try {
-    const saved = JSON.parse(await fs.promises.readFile(storePath(), 'utf8'))
-    if (typeof saved?.preferences?.launchAtLogin === 'boolean') enabled = saved.preferences.launchAtLogin
+    return await readJsonFile(storePath())
   } catch (error) {
-    if (error.code !== 'ENOENT') console.error('Could not read the launch-at-login preference:', error)
-  }
-  try {
-    setLaunchAtLogin(enabled)
-  } catch (error) {
-    console.error('Could not synchronize the launch-at-login setting:', error)
+    if (error.code !== 'ENOENT') console.error('Could not read the saved data:', error)
+    return null
   }
 }
 
@@ -160,10 +147,11 @@ function scheduleNotifications(data) {
   if (notificationRefreshTimer) clearTimeout(notificationRefreshTimer)
   notificationRefreshTimer = null
 
+  const tasks = data?.tasks ?? []
   const now = Date.now()
   const maximumDelay = 2_147_000_000
   let hasDistantReminder = false
-  for (const task of data?.tasks ?? []) {
+  for (const task of tasks) {
     if (task.completed || !task.reminderAt) continue
     const delay = new Date(task.reminderAt).getTime() - now
     if (!Number.isFinite(delay) || delay <= 0) continue
@@ -191,7 +179,7 @@ function scheduleNotifications(data) {
   }
 
   const badgeNow = new Date()
-  const dueTodayCount = (data?.tasks ?? []).filter((task) => {
+  const dueTodayCount = tasks.filter((task) => {
     if (task.completed || !task.dueAt) return false
     const due = new Date(task.dueAt)
     return due.getFullYear() === badgeNow.getFullYear() && due.getMonth() === badgeNow.getMonth() && due.getDate() === badgeNow.getDate()
@@ -228,31 +216,29 @@ ipcMain.on('knot:save-sync', (event, data) => {
 })
 
 ipcMain.handle('knot:set-theme', (_event, theme) => {
-  nativeTheme.themeSource = themeSources.includes(theme) ? theme : 'dark'
+  nativeTheme.themeSource = resolveThemeSource(theme)
   return nativeTheme.shouldUseDarkColors
 })
 
-ipcMain.handle('knot:set-launch-at-login', (_event, enabled) => {
-  return setLaunchAtLogin(enabled)
-})
+ipcMain.handle('knot:set-launch-at-login', (_event, enabled) => setLaunchAtLogin(enabled))
 
 app.on('second-instance', () => {
   if (app.isReady()) revealMainWindow(true)
 })
 
-async function scheduleSavedNotifications() {
-  try {
-    scheduleNotifications(await readJsonFile(storePath()))
-  } catch (error) {
-    if (error.code !== 'ENOENT') console.error('Could not schedule reminders from saved data:', error)
-  }
-}
-
 app.whenReady().then(async () => {
-  await Promise.all([applySavedTheme(), syncLaunchAtLoginPreference()])
+  const saved = await readSavedData()
+  // The window is painted before the renderer loads, so the saved appearance must reach
+  // nativeTheme first to avoid a flash of the wrong ground.
+  nativeTheme.themeSource = resolveThemeSource(saved?.preferences?.theme)
+  try {
+    setLaunchAtLogin(saved?.preferences?.launchAtLogin === true)
+  } catch (error) {
+    console.error('Could not synchronize the launch-at-login setting:', error)
+  }
   createMenu()
   createWindow()
-  scheduleSavedNotifications()
+  scheduleNotifications(saved)
   powerMonitor.on('resume', revealMainWindow)
   powerMonitor.on('unlock-screen', revealMainWindow)
   app.on('activate', () => {

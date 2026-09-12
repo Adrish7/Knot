@@ -25,7 +25,7 @@ interface TaskItemProps {
 export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggleSubtask, onStar, onDelete, onSetDue, onRename, onDragStart, onDragEnd, dropEdge }: TaskItemProps) {
   const subtaskCount = task.subtasks.length
   const [editingTitle, setEditingTitle] = useState(false)
-  const [draftTitle, setDraftTitle] = useState(task.title)
+  const [draftTitle, setDraftTitle] = useState('')
   const [dragging, setDragging] = useState(false)
   const [suppressDrag, setSuppressDrag] = useState(false)
   const [subtasksOpen, setSubtasksOpen] = useState(true)
@@ -37,10 +37,6 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
   const rowRef = useRef<HTMLElement>(null)
 
   useEffect(() => () => completeTimers.current.forEach(clearTimeout), [])
-
-  useEffect(() => {
-    if (!editingTitle) setDraftTitle(task.title)
-  }, [editingTitle, task.title])
 
   const toggleComplete = () => {
     if (task.completed) return onComplete(task.id, false)
@@ -73,7 +69,6 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
   const finishTitleEdit = () => {
     const title = draftTitle.trim()
     setEditingTitle(false)
-    setDraftTitle(title || task.title)
     if (title && title !== task.title) onRename?.(task.id, title)
   }
 
@@ -141,7 +136,6 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
                 }
                 if (event.key === 'Escape') {
                   event.preventDefault()
-                  setDraftTitle(task.title)
                   setEditingTitle(false)
                 }
               }}

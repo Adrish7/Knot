@@ -1,7 +1,7 @@
 import { Bell, CalendarClock, CalendarDays, Check, ChevronDown, Clock3, ListChecks, Plus, Repeat2, Star, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { uid } from '../data'
-import { formatDayKey } from '../format'
+import { completedSubtasks, formatDayKey } from '../format'
 import { DateTimePicker, FocusDayPicker } from './DateTimePicker'
 import type { Recurrence, Task, TaskList } from '../types'
 
@@ -17,9 +17,11 @@ interface TaskPanelProps {
 export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onClose }: TaskPanelProps) {
   const [newSubtask, setNewSubtask] = useState('')
   const listColor = lists.find((list) => list.id === task.listId)?.color
+
   const addSubtask = () => {
-    if (!newSubtask.trim()) return
-    onUpdate({ subtasks: [...task.subtasks, { id: uid('subtask'), title: newSubtask.trim(), completed: false }] })
+    const title = newSubtask.trim()
+    if (!title) return
+    onUpdate({ subtasks: [...task.subtasks, { id: uid('subtask'), title, completed: false }] })
     setNewSubtask('')
   }
 
@@ -73,7 +75,7 @@ export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onClose
         </div>
 
         <section className="subtasks-section">
-          <div className="panel-section-title"><span>Subtasks</span><small>{task.subtasks.filter((item) => item.completed).length}/{task.subtasks.length}</small></div>
+          <div className="panel-section-title"><span>Subtasks</span><small>{completedSubtasks(task)}/{task.subtasks.length}</small></div>
           <div className="subtask-list">
             {task.subtasks.map((subtask) => (
               <div className={`subtask ${subtask.completed ? 'done' : ''}`} key={subtask.id}>

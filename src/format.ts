@@ -17,21 +17,31 @@ export function parseDateKey(key: string) {
   return new Date(year, month - 1, dayOfMonth)
 }
 
-export function formatDayKey(key: string) {
-  const value = parseDateKey(key)
+export function sameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+// 'Today', 'Tomorrow', or the date (with the year only when it is not the current one).
+function relativeDayLabel(value: Date) {
   const now = new Date()
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  if (value.toDateString() === now.toDateString()) return 'Today'
-  if (value.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
+  if (sameDay(value, now)) return 'Today'
+  const tomorrow = new Date(now)
+  tomorrow.setDate(now.getDate() + 1)
+  if (sameDay(value, tomorrow)) return 'Tomorrow'
   return (value.getFullYear() === now.getFullYear() ? day : dayWithYear).format(value)
 }
 
+export function formatDayKey(key: string) {
+  return relativeDayLabel(parseDateKey(key))
+}
+
 export function isToday(iso: string | null) {
-  if (!iso) return false
-  const value = new Date(iso)
-  const now = new Date()
-  return value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth() && value.getDate() === now.getDate()
+  return Boolean(iso) && sameDay(new Date(iso as string), new Date())
+}
+
+// A task belongs on the Today page when it is due today or planned onto today.
+export function isForToday(task: Task) {
+  return isToday(task.dueAt) || task.focusDates.includes(todayKey())
 }
 
 export function isOverdue(task: Task) {
@@ -42,16 +52,7 @@ export function formatDue(iso: string | null) {
   if (!iso) return ''
   const value = new Date(iso)
   if (!Number.isFinite(value.getTime())) return ''
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString()
-  const now = new Date()
-  const prefix = sameDay(value, now)
-    ? 'Today'
-    : sameDay(value, tomorrow)
-      ? 'Tomorrow'
-      : (value.getFullYear() === now.getFullYear() ? day : dayWithYear).format(value)
-  return `${prefix}, ${time.format(value)}`
+  return `${relativeDayLabel(value)}, ${time.format(value)}`
 }
 
 export function timeAgo(iso: string | null, fallback = '') {

@@ -1,12 +1,12 @@
-export {}
+import type { KnotData, ThemeMode } from './types'
 
 declare global {
   interface Window {
     knot?: {
-      load: () => Promise<import('./types').KnotData | null>
-      save: (data: import('./types').KnotData) => Promise<boolean>
-      saveSync: (data: import('./types').KnotData) => boolean
-      setTheme: (theme: import('./types').ThemeMode) => Promise<boolean>
+      load: () => Promise<KnotData | null>
+      save: (data: KnotData) => Promise<boolean>
+      saveSync: (data: KnotData) => boolean
+      setTheme: (theme: ThemeMode) => Promise<boolean>
       setLaunchAtLogin: (enabled: boolean) => Promise<boolean>
     }
   }

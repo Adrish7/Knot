@@ -10,10 +10,23 @@ import { TaskPanel } from './components/TaskPanel'
 import { ListRing, listProgress } from './components/ListRing'
 import { Trash } from './components/Trash'
 import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sortFocusDay, sortStarred, uid } from './data'
-import { isToday, todayKey } from './format'
+import { isForToday, todayKey } from './format'
 import type { DeletedTask, FocusStatus, KnotData, Task, TaskList, ThemeMode, ViewId } from './types'
 
 const STORAGE_KEY = 'knot.desktop.data'
+const longDate = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+
+interface Page {
+  title: string
+  icon: React.ReactNode
+  color?: string
+  subline?: string
+  mode: 'board' | 'list' | 'smart'
+}
+
+function openTasksLabel(count: number) {
+  return count === 0 ? 'All done' : `${count} open ${count === 1 ? 'task' : 'tasks'}`
+}
 
 function newTaskSortOrder(tasks: Task[], listId: string) {
   return tasks.reduce((order, task) => (
@@ -21,6 +34,10 @@ function newTaskSortOrder(tasks: Task[], listId: string) {
       ? Math.min(order, task.sortOrder - 1)
       : order
   ), 0)
+}
+
+function makeTrashEntry(task: Task, lists: TaskList[]): DeletedTask {
+  return { task, listName: task.listId === null ? 'Calendar only' : lists.find((list) => list.id === task.listId)?.name ?? 'Untitled list', deletedAt: new Date().toISOString() }
 }
 
 function App() {
@@ -35,8 +52,14 @@ function App() {
   const [listMenu, setListMenu] = useState<{ list: TaskList; x: number; y: number } | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; confirmLabel: string; run: () => void } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  // Bumped once a minute so day-relative views (Today, due labels) roll over at midnight.
   const [clockTick, setClockTick] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
+
+  const showToast = (message: string) => {
+    setToast(message)
+    window.setTimeout(() => setToast((current) => current === message ? null : current), 2600)
+  }
 
   useEffect(() => {
     let active = true
@@ -91,15 +114,15 @@ function App() {
   }, [])
 
   useEffect(() => {
+    const media = matchMedia('(prefers-color-scheme: dark)')
     const applyTheme = () => {
       const mode = data.preferences.theme
-      const resolved = mode === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode
+      const resolved = mode === 'system' ? (media.matches ? 'dark' : 'light') : mode
       document.documentElement.dataset.theme = resolved
       document.documentElement.style.colorScheme = resolved
       window.knot?.setTheme(mode).catch(() => showToast('Could not update the app theme.'))
     }
     applyTheme()
-    const media = matchMedia('(prefers-color-scheme: dark)')
     media.addEventListener('change', applyTheme)
     return () => media.removeEventListener('change', applyTheme)
   }, [data.preferences.theme])
@@ -134,11 +157,6 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [confirmAction, createListOpen, data.lists, listMenu, quickAddListId, renameList, selectedView])
 
-  const showToast = (message: string) => {
-    setToast(message)
-    window.setTimeout(() => setToast((current) => current === message ? null : current), 2600)
-  }
-
   const sortedLists = useMemo(() => [...data.lists].sort((a, b) => a.sortOrder - b.sortOrder), [data.lists])
   const selectedTask = data.tasks.find((task) => task.id === selectedTaskId) ?? null
 
@@ -147,7 +165,7 @@ function App() {
     let tasks = data.tasks.filter((task) => task.listId !== null)
     if (needle) return tasks.filter((task) => `${task.title} ${task.notes} ${task.subtasks.map((item) => item.title).join(' ')}`.toLowerCase().includes(needle))
     tasks = tasks.filter((task) => !task.completed)
-    if (selectedView === 'today') tasks = sortFocusDay(tasks.filter((task) => isToday(task.dueAt) || task.focusDates.includes(todayKey())), todayKey())
+    if (selectedView === 'today') tasks = sortFocusDay(tasks.filter(isForToday), todayKey())
     else if (selectedView === 'starred') tasks = sortStarred(tasks.filter((task) => task.starred))
     else if (selectedView.startsWith('list:')) tasks = tasks.filter((task) => task.listId === selectedView.slice(5))
     return tasks
@@ -158,35 +176,27 @@ function App() {
   const searching = Boolean(query.trim())
   const activeListId = selectedView.startsWith('list:') ? selectedView.slice(5) : null
   const activeList = sortedLists.find((list) => list.id === activeListId)
-  const openDisplayed = displayedTasks.filter((task) => !task.completed).length
-  const openCountLabel = openDisplayed === 0 ? 'All done' : `${openDisplayed} open ${openDisplayed === 1 ? 'task' : 'tasks'}`
-  const calendarOpen = data.tasks.filter((task) => !task.completed).length
-  const calendarOpenCountLabel = calendarOpen === 0 ? 'All done' : `${calendarOpen} open ${calendarOpen === 1 ? 'task' : 'tasks'}`
-  const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())
-  const activeListOpen = activeList ? data.tasks.filter((task) => task.listId === activeList.id && !task.completed).length : 0
-  const activeListDone = activeList ? data.tasks.filter((task) => task.listId === activeList.id && task.completed).length : 0
-  const page = selectedView === 'completed'
-    ? { title: 'Completed', icon: <CheckCircle2 />, color: 'var(--c-done)', mode: 'smart' as const }
-    : selectedView === 'trash'
-    ? { title: 'Recently deleted', icon: <Trash2 />, color: 'var(--c-trash)', mode: 'smart' as const }
-    : searching
-    ? { title: 'Search', icon: <Search />, color: 'var(--text-2)', subline: `${displayedTasks.length} ${displayedTasks.length === 1 ? 'result' : 'results'} for “${query.trim()}”`, mode: 'smart' as const }
-    : selectedView === 'all'
-      ? { title: 'All tasks', icon: <Inbox />, color: 'var(--c-all)', mode: 'board' as const }
-      : selectedView === 'today'
-        ? { title: 'Today', icon: <Sun />, color: 'var(--c-today)', subline: todayLabel, mode: 'smart' as const }
-        : selectedView === 'calendar'
-        ? { title: 'Calendar', icon: <CalendarDays />, color: 'var(--c-calendar)', subline: calendarOpenCountLabel, mode: 'smart' as const }
-        : selectedView === 'starred'
-          ? { title: 'Starred', icon: <Star fill="currentColor" />, color: 'var(--c-starred)', mode: 'smart' as const }
-          : { title: activeList?.name ?? 'List', icon: <ListRing color={activeList?.color ?? 'var(--accent)'} progress={listProgress(activeListOpen, activeListDone)} />, color: activeList?.color, subline: openCountLabel, mode: 'list' as const }
+
+  const describePage = (): Page => {
+    if (selectedView === 'completed') return { title: 'Completed', icon: <CheckCircle2 />, color: 'var(--c-done)', mode: 'smart' }
+    if (selectedView === 'trash') return { title: 'Recently deleted', icon: <Trash2 />, color: 'var(--c-trash)', mode: 'smart' }
+    if (searching) return { title: 'Search', icon: <Search />, color: 'var(--text-2)', subline: `${displayedTasks.length} ${displayedTasks.length === 1 ? 'result' : 'results'} for “${query.trim()}”`, mode: 'smart' }
+    if (selectedView === 'all') return { title: 'All tasks', icon: <Inbox />, color: 'var(--c-all)', mode: 'board' }
+    if (selectedView === 'today') return { title: 'Today', icon: <Sun />, color: 'var(--c-today)', subline: longDate.format(new Date()), mode: 'smart' }
+    if (selectedView === 'calendar') return { title: 'Calendar', icon: <CalendarDays />, color: 'var(--c-calendar)', subline: openTasksLabel(data.tasks.filter((task) => !task.completed).length), mode: 'smart' }
+    if (selectedView === 'starred') return { title: 'Starred', icon: <Star fill="currentColor" />, color: 'var(--c-starred)', mode: 'smart' }
+    const open = activeList ? data.tasks.filter((task) => task.listId === activeList.id && !task.completed).length : 0
+    const done = activeList ? doneCounts[activeList.id] ?? 0 : 0
+    return { title: activeList?.name ?? 'List', icon: <ListRing color={activeList?.color ?? 'var(--accent)'} progress={listProgress(open, done)} />, color: activeList?.color, subline: openTasksLabel(open), mode: 'list' }
+  }
+  const page = describePage()
 
   const updatePreferences = (patch: Partial<KnotData['preferences']>) => setData((current) => ({ ...current, preferences: { ...current.preferences, ...patch } }))
 
   const addList = (name: string, color: string) => {
-    const list: TaskList = { id: uid('list'), name, color, createdAt: new Date().toISOString(), sortOrder: data.lists.length }
-    setData((current) => ({ ...current, lists: [...current.lists, list] }))
-    setSelectedView(`list:${list.id}`)
+    const id = uid('list')
+    setData((current) => ({ ...current, lists: [...current.lists, { id, name, color, createdAt: new Date().toISOString(), sortOrder: current.lists.length }] }))
+    setSelectedView(`list:${id}`)
     setCreateListOpen(false)
     showToast(`${name} created`)
   }
@@ -218,8 +228,9 @@ function App() {
     }),
   }))
 
-  const patchFocus = (taskId: string, patch: (task: Task) => Partial<Task>) => {
-    setData((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === taskId ? { ...task, ...patch(task) } : task) }))
+  const toggleStar = (taskId: string) => {
+    const task = data.tasks.find((item) => item.id === taskId)
+    if (task) updateTask(taskId, { starred: !task.starred })
   }
 
   // Puts a task on `day` (adding it, or moving it there from `fromDay`) at the position in that
@@ -257,6 +268,7 @@ function App() {
     }
   })
   const addFocusDate = (taskId: string, day: string, beforeTaskId?: string | null) => placeFocus(taskId, day, null, beforeTaskId)
+  const moveFocusDate = (taskId: string, fromDay: string, toDay: string, beforeTaskId?: string | null) => placeFocus(taskId, toDay, fromDay, beforeTaskId)
 
   // Drag-to-reorder on the Today and Starred pages. The moved task lands before `beforeTaskId`
   // (null appends) and every task on the page gets an explicit position so the order sticks.
@@ -277,10 +289,10 @@ function App() {
   })
   const reorderToday = (taskId: string, beforeTaskId: string | null) => {
     const today = todayKey()
-    reorderView(taskId, beforeTaskId, (task) => isToday(task.dueAt) || task.focusDates.includes(today), (tasks) => sortFocusDay(tasks, today), (task, position) => ({ ...task, focusOrder: { ...task.focusOrder, [today]: position } }))
+    reorderView(taskId, beforeTaskId, isForToday, (tasks) => sortFocusDay(tasks, today), (task, position) => ({ ...task, focusOrder: { ...task.focusOrder, [today]: position } }))
   }
   const reorderStarred = (taskId: string, beforeTaskId: string | null) => reorderView(taskId, beforeTaskId, (task) => task.starred, sortStarred, (task, position) => ({ ...task, starredOrder: position }))
-  const moveFocusDate = (taskId: string, fromDay: string, toDay: string, beforeTaskId?: string | null) => placeFocus(taskId, toDay, fromDay, beforeTaskId)
+
   const removeFocusDate = (taskId: string, day: string) => setData((current) => ({
     ...current,
     tasks: current.tasks.flatMap((task) => {
@@ -292,17 +304,19 @@ function App() {
       return [{ ...task, focusDates, focusStatus, focusOrder }]
     }),
   }))
-  const setFocusStatus = (taskId: string, day: string, status: FocusStatus | null) => patchFocus(taskId, (task) => {
-    const { [day]: _removed, ...focusStatus } = task.focusStatus
-    return { focusStatus: status ? { ...focusStatus, [day]: status } : focusStatus }
-  })
+
+  const setFocusStatus = (taskId: string, day: string, status: FocusStatus | null) => setData((current) => ({
+    ...current,
+    tasks: current.tasks.map((task) => {
+      if (task.id !== taskId) return task
+      const { [day]: _removed, ...focusStatus } = task.focusStatus
+      return { ...task, focusStatus: status ? { ...focusStatus, [day]: status } : focusStatus }
+    }),
+  }))
 
   const addTaskOnDay = (day: string, title: string) => {
     const task = { ...createTask(null, title, 0), focusDates: [day] }
-    setData((current) => ({
-      ...current,
-      tasks: [...current.tasks, task],
-    }))
+    setData((current) => ({ ...current, tasks: [...current.tasks, task] }))
     showToast('Added to calendar only')
   }
 
@@ -422,31 +436,29 @@ function App() {
     })
   }
 
+  // Moves a task into `targetListId` ahead of `beforeTaskId` (or to the end), then renumbers
+  // the open/completed peers of both lists so every position is explicit.
   const moveTask = (taskId: string, targetListId: string, beforeTaskId?: string) => {
     setData((current) => {
       const moving = current.tasks.find((task) => task.id === taskId)
       if (!moving) return current
-      const sourceListId = moving.listId
-      const targetPeers = current.tasks
-        .filter((task) => task.listId === targetListId && task.completed === moving.completed && task.id !== taskId)
+      const peersOf = (listId: string | null) => current.tasks
+        .filter((task) => task.listId === listId && task.completed === moving.completed && task.id !== taskId)
         .sort((a, b) => a.sortOrder - b.sortOrder)
+      const targetPeers = peersOf(targetListId)
       const rawIndex = beforeTaskId ? targetPeers.findIndex((task) => task.id === beforeTaskId) : targetPeers.length
-      const index = rawIndex < 0 ? targetPeers.length : rawIndex
-      targetPeers.splice(index, 0, { ...moving, listId: targetListId })
+      targetPeers.splice(rawIndex < 0 ? targetPeers.length : rawIndex, 0, moving)
+      const sourcePeers = moving.listId === targetListId ? [] : peersOf(moving.listId)
 
-      const targetOrder = new Map(targetPeers.map((task, position) => [task.id, position]))
-      const sourcePeers = sourceListId === targetListId
-        ? []
-        : current.tasks.filter((task) => task.listId === sourceListId && task.completed === moving.completed && task.id !== taskId).sort((a, b) => a.sortOrder - b.sortOrder)
-      const sourceOrder = new Map(sourcePeers.map((task, position) => [task.id, position]))
-
+      const orderOf = new Map<string, number>()
+      targetPeers.forEach((task, position) => orderOf.set(task.id, position))
+      sourcePeers.forEach((task, position) => orderOf.set(task.id, position))
       return {
         ...current,
         tasks: current.tasks.map((task) => {
-          if (task.id === taskId) return { ...task, listId: targetListId, sortOrder: targetOrder.get(task.id) ?? index }
-          if (task.completed === moving.completed && task.listId === targetListId) return { ...task, sortOrder: targetOrder.get(task.id) ?? task.sortOrder }
-          if (task.completed === moving.completed && sourceListId !== targetListId && task.listId === sourceListId) return { ...task, sortOrder: sourceOrder.get(task.id) ?? task.sortOrder }
-          return task
+          const position = orderOf.get(task.id)
+          if (position === undefined) return task
+          return task.id === taskId ? { ...task, listId: targetListId, sortOrder: position } : { ...task, sortOrder: position }
         }),
       }
     })
@@ -497,6 +509,12 @@ function App() {
     const x = Math.max(8, Math.min(rect.right + 4, window.innerWidth - width - 8))
     const y = Math.max(8, Math.min(rect.top, window.innerHeight - height - 8))
     setListMenu((current) => current?.list.id === list.id ? null : { list, x, y })
+  }
+
+  const openList = (listId: string) => {
+    setSelectedView(`list:${listId}`)
+    setQuery('')
+    setQuickAddListId(null)
   }
 
   if (!hydrated) return <div className="splash"><img src="./icon.png" alt="" /><span>Loading Knot</span></div>
@@ -551,34 +569,34 @@ function App() {
             onAddTaskOnDay={addTaskOnDay}
             onAddTask={(title, listId) => { const target = listId ?? sortedLists[0]?.id; if (target) addTask(target, title); else setCreateListOpen(true) }}
           /> : <Board
-          mode={page.mode}
-          lists={sortedLists}
-          tasks={displayedTasks}
-          activeListId={activeListId}
-          doneCounts={doneCounts}
-          emptyIcon={page.icon}
-          sortMode={data.preferences.sortMode}
-          quickAddListId={quickAddListId}
-          quickAddEnabled={page.mode === 'list' || (!searching && (selectedView === 'today' || selectedView === 'starred'))}
-          onQuickAddList={setQuickAddListId}
-          onAddTask={(listId, title, openDetails) => addTask(listId, title, openDetails,
-            selectedView === 'today' ? { focusDates: [todayKey()] }
-              : selectedView === 'starred' ? { starred: true }
-              : {})}
-          onOpenTask={setSelectedTaskId}
-          onCompleteTask={completeTask}
-          onToggleSubtask={toggleSubtask}
-          onStarTask={(taskId) => { const task = data.tasks.find((item) => item.id === taskId); if (task) updateTask(taskId, { starred: !task.starred }) }}
-          onDeleteTask={deleteTask}
-          onSetDueTask={(taskId, dueAt) => updateTask(taskId, { dueAt })}
-          onRenameTask={(taskId, title) => updateTask(taskId, { title })}
-          onRenameList={renameListById}
-          onListMenu={openListMenu}
-          onMoveTask={moveTask}
-          onReorderTask={searching ? undefined : selectedView === 'today' ? reorderToday : selectedView === 'starred' ? reorderStarred : undefined}
-          onMoveList={moveList}
-          onCreateList={() => setCreateListOpen(true)}
-        />}
+            mode={page.mode}
+            lists={sortedLists}
+            tasks={displayedTasks}
+            activeListId={activeListId}
+            doneCounts={doneCounts}
+            emptyIcon={page.icon}
+            sortMode={data.preferences.sortMode}
+            quickAddListId={quickAddListId}
+            quickAddEnabled={page.mode === 'list' || (!searching && (selectedView === 'today' || selectedView === 'starred'))}
+            onQuickAddList={setQuickAddListId}
+            onAddTask={(listId, title, openDetails) => addTask(listId, title, openDetails,
+              selectedView === 'today' ? { focusDates: [todayKey()] }
+                : selectedView === 'starred' ? { starred: true }
+                : {})}
+            onOpenTask={setSelectedTaskId}
+            onCompleteTask={completeTask}
+            onToggleSubtask={toggleSubtask}
+            onStarTask={toggleStar}
+            onDeleteTask={deleteTask}
+            onSetDueTask={(taskId, dueAt) => updateTask(taskId, { dueAt })}
+            onRenameTask={(taskId, title) => updateTask(taskId, { title })}
+            onRenameList={renameListById}
+            onListMenu={openListMenu}
+            onMoveTask={moveTask}
+            onReorderTask={searching ? undefined : selectedView === 'today' ? reorderToday : selectedView === 'starred' ? reorderStarred : undefined}
+            onMoveList={moveList}
+            onCreateList={() => setCreateListOpen(true)}
+          />}
       </section>
 
       {selectedTask && <><button className="panel-scrim" onClick={() => setSelectedTaskId(null)} aria-label="Close details" /><TaskPanel task={selectedTask} lists={sortedLists} onUpdate={(patch) => {
@@ -593,7 +611,7 @@ function App() {
       {listMenu && (
         <div className="context-menu" role="menu" aria-label={`Options for ${listMenu.list.name}`} style={{ left: listMenu.x, top: listMenu.y }} onMouseDown={(event) => event.stopPropagation()}>
           <button role="menuitem" autoFocus onClick={() => { setRenameList(listMenu.list); setListMenu(null) }}><Pencil size={14} />Rename</button>
-          <button role="menuitem" onClick={() => { setSelectedView(`list:${listMenu.list.id}`); setQuery(''); setQuickAddListId(null); setListMenu(null) }}><FolderOpen size={14} />Open list</button>
+          <button role="menuitem" onClick={() => { openList(listMenu.list.id); setListMenu(null) }}><FolderOpen size={14} />Open list</button>
           <span />
           <button role="menuitem" className="danger" onClick={() => deleteList(listMenu.list)}><Trash2 size={14} />Delete list</button>
         </div>
@@ -602,10 +620,6 @@ function App() {
       {toast && <div className="toast"><CheckCircle2 size={16} />{toast}</div>}
     </div>
   )
-}
-
-function makeTrashEntry(task: Task, lists: TaskList[]): DeletedTask {
-  return { task, listName: task.listId === null ? 'Calendar only' : lists.find((list) => list.id === task.listId)?.name ?? 'Untitled list', deletedAt: new Date().toISOString() }
 }
 
 export default App

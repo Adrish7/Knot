@@ -1,6 +1,6 @@
 import { CalendarDays, CheckCircle2, ChevronLeft, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { todayKey } from '../format'
+import { isForToday } from '../format'
 import type { Task, TaskList, ThemeMode, ViewId } from '../types'
 import { ListRing, listProgress } from './ListRing'
 
@@ -50,12 +50,9 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
     }
   }, [settingsOpen])
 
-  const listedTasks = tasks.filter((task) => task.listId !== null)
-  const openCount = listedTasks.filter((task) => !task.completed).length
-  const today = new Date().toDateString()
-  const focusToday = todayKey()
-  const todayCount = listedTasks.filter((task) => !task.completed && ((task.dueAt && new Date(task.dueAt).toDateString() === today) || task.focusDates.includes(focusToday))).length
-  const starredCount = listedTasks.filter((task) => !task.completed && task.starred).length
+  const openTasks = tasks.filter((task) => task.listId !== null && !task.completed)
+  const todayCount = openTasks.filter(isForToday).length
+  const starredCount = openTasks.filter((task) => task.starred).length
 
   return (
     <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''}`}>
@@ -72,7 +69,7 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
       </label>
 
       <nav className="primary-nav" aria-label="Task views">
-        <SidebarLink collapsed={collapsed} active={selectedView === 'all'} color="var(--c-all)" icon={<Inbox />} label="All tasks" count={openCount} onClick={() => onSelect('all')} />
+        <SidebarLink collapsed={collapsed} active={selectedView === 'all'} color="var(--c-all)" icon={<Inbox />} label="All tasks" count={openTasks.length} onClick={() => onSelect('all')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'today'} color="var(--c-today)" icon={<Sun />} label="Today" count={todayCount} onClick={() => onSelect('today')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'calendar'} color="var(--c-calendar)" icon={<CalendarDays />} label="Calendar" count={0} onClick={() => onSelect('calendar')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'starred'} color="var(--c-starred)" icon={<Star fill="currentColor" />} label="Starred" count={starredCount} onClick={() => onSelect('starred')} />

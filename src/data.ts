@@ -1,5 +1,5 @@
 import { dateKey } from './format'
-import type { DeletedTask, FocusStatus, KnotData, Preferences, Recurrence, Subtask, Task, TaskList } from './types'
+import type { DeletedTask, FocusStatus, KnotData, Preferences, Recurrence, SortMode, Subtask, Task, TaskList, ThemeMode } from './types'
 
 export const TRASH_RETENTION_DAYS = 30
 
@@ -12,8 +12,8 @@ function currentColor(color: string) {
   return index === -1 ? color : palette[index]
 }
 const recurrences: Recurrence[] = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly']
-const sortModes: Preferences['sortMode'][] = ['manual', 'date', 'starred']
-const themes: Preferences['theme'][] = ['light', 'dark', 'system']
+const sortModes: SortMode[] = ['manual', 'date', 'starred']
+const themes: ThemeMode[] = ['light', 'dark', 'system']
 
 export function createDefaultPreferences(): Preferences {
   return {
@@ -42,24 +42,30 @@ function dayKey(daysFromNow: number) {
   return dateKey(date)
 }
 
-// Tasks planned on `day`, in the order the user arranged them; tasks never
-// reordered keep their original relative order after the arranged ones.
-export function sortFocusDay(tasks: Task[], day: string): Task[] {
-  const position = (task: Task) => task.focusOrder[day] ?? Number.POSITIVE_INFINITY
+// Tasks in the order the user arranged them; tasks never arranged (no position) keep
+// their original relative order after the arranged ones.
+function sortByPosition(tasks: Task[], position: (task: Task) => number | null | undefined): Task[] {
+  const rank = (task: Task) => position(task) ?? Number.POSITIVE_INFINITY
   return [...tasks].sort((a, b) => {
-    const [left, right] = [position(a), position(b)]
+    const [left, right] = [rank(a), rank(b)]
     return left === right ? 0 : left - right
   })
 }
 
-// Starred tasks in the order the user arranged them on the Starred page; never-arranged
-// tasks keep their original relative order after the arranged ones.
-export function sortStarred(tasks: Task[]): Task[] {
-  const position = (task: Task) => task.starredOrder ?? Number.POSITIVE_INFINITY
-  return [...tasks].sort((a, b) => {
-    const [left, right] = [position(a), position(b)]
-    return left === right ? 0 : left - right
-  })
+export function sortFocusDay(tasks: Task[], day: string) {
+  return sortByPosition(tasks, (task) => task.focusOrder[day])
+}
+
+export function sortStarred(tasks: Task[]) {
+  return sortByPosition(tasks, (task) => task.starredOrder)
+}
+
+// Soonest due date first; tasks without one follow in their manual order.
+export function compareByDue(a: Task, b: Task) {
+  if (!a.dueAt && !b.dueAt) return a.sortOrder - b.sortOrder
+  if (!a.dueAt) return 1
+  if (!b.dueAt) return -1
+  return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()
 }
 
 export function createTask(listId: string | null, title: string, sortOrder: number): Task {
@@ -113,9 +119,9 @@ export function createSeedData(): KnotData {
         ],
       }),
       make(focusId, 'Send the project update', 1, { dueAt: isoDate(1, 16, 30), focusDates: [dayKey(0), dayKey(1)] }),
-      make(focusId, 'Friday weekly review', 2, { dueAt: isoDate(3, 17), recurrence: 'weekly' as Recurrence }),
+      make(focusId, 'Friday weekly review', 2, { dueAt: isoDate(3, 17), recurrence: 'weekly' }),
       make(personalId, 'Book a table for Saturday', 0, { dueAt: isoDate(2, 19) }),
-      make(personalId, 'Water the plants', 1, { recurrence: 'weekly' as Recurrence }),
+      make(personalId, 'Water the plants', 1, { recurrence: 'weekly' }),
       make(somedayId, 'Plan a screen-free Sunday', 0, { notes: 'Walk, a good lunch, and the book on the nightstand.' }),
       make(somedayId, 'Learn to make fresh pasta', 1),
     ],
@@ -192,8 +198,8 @@ export function normalizeData(value: unknown): KnotData | null {
     tasks,
     trash,
     preferences: {
-      theme: themes.includes(preferences.theme as Preferences['theme']) ? preferences.theme as Preferences['theme'] : defaults.theme,
-      sortMode: sortModes.includes(preferences.sortMode as Preferences['sortMode']) ? preferences.sortMode as Preferences['sortMode'] : defaults.sortMode,
+      theme: oneOf(themes, preferences.theme, defaults.theme),
+      sortMode: oneOf(sortModes, preferences.sortMode, defaults.sortMode),
       sidebarCollapsed: typeof preferences.sidebarCollapsed === 'boolean' ? preferences.sidebarCollapsed : defaults.sidebarCollapsed,
       launchAtLogin: typeof preferences.launchAtLogin === 'boolean' ? preferences.launchAtLogin : defaults.launchAtLogin,
     },
@@ -201,7 +207,6 @@ export function normalizeData(value: unknown): KnotData | null {
 }
 
 function normalizeTask(candidate: Record<string, unknown>, listId: string | null, index: number, now: string): Task {
-  const recurrence = recurrences.includes(candidate.recurrence as Recurrence) ? candidate.recurrence as Recurrence : 'none'
   const completed = Boolean(candidate.completed)
   const focusDates = normalizeFocusDates(candidate.focusDates)
   return {
@@ -215,7 +220,7 @@ function normalizeTask(candidate: Record<string, unknown>, listId: string | null
     focusOrder: normalizeFocusOrder(candidate.focusOrder),
     starredOrder: typeof candidate.starredOrder === 'number' && Number.isFinite(candidate.starredOrder) ? candidate.starredOrder : null,
     reminderAt: nullableIso(candidate.reminderAt),
-    recurrence,
+    recurrence: oneOf(recurrences, candidate.recurrence, 'none'),
     starred: Boolean(candidate.starred),
     completed,
     completedAt: completed ? nullableIso(candidate.completedAt) : null,
@@ -283,6 +288,10 @@ function nullableIso(value: unknown) {
 
 function finiteNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function oneOf<T extends string>(options: readonly T[], value: unknown, fallback: T): T {
+  return options.includes(value as T) ? value as T : fallback
 }
 
 export function nextOccurrence(iso: string | null, recurrence: Recurrence) {

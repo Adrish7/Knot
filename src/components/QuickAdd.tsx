@@ -5,9 +5,12 @@ export function QuickAdd({ expanded, onExpand, onAdd, onCancel }: { expanded: bo
   const [title, setTitle] = useState('')
   const input = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    const timer = expanded ? window.setTimeout(() => input.current?.focus(), 20) : null
-    if (!expanded) setTitle('')
-    return () => { if (timer !== null) window.clearTimeout(timer) }
+    if (!expanded) {
+      setTitle('')
+      return
+    }
+    const timer = window.setTimeout(() => input.current?.focus(), 20)
+    return () => window.clearTimeout(timer)
   }, [expanded])
 
   const add = (openDetails = false) => {

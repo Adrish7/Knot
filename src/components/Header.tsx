@@ -1,5 +1,5 @@
 import { ArrowDownUp, ChevronDown } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { SortMode } from '../types'
 
 interface HeaderProps {
@@ -17,16 +17,17 @@ const sortLabels: Record<SortMode, string> = { manual: 'My order', date: 'Due da
 
 export function Header({ title, subline, icon, color, sortMode, showSort, onSort, onRenameTitle }: HeaderProps) {
   const [editingTitle, setEditingTitle] = useState(false)
-  const [draftTitle, setDraftTitle] = useState(title)
+  const [draftTitle, setDraftTitle] = useState('')
 
-  useEffect(() => {
-    if (!editingTitle) setDraftTitle(title)
-  }, [editingTitle, title])
+  const beginTitleEdit = () => {
+    if (!onRenameTitle) return
+    setDraftTitle(title)
+    setEditingTitle(true)
+  }
 
   const finishTitleEdit = () => {
     const nextTitle = draftTitle.trim()
     setEditingTitle(false)
-    setDraftTitle(nextTitle || title)
     if (nextTitle && nextTitle !== title) onRenameTitle?.(nextTitle)
   }
 
@@ -48,14 +49,11 @@ export function Header({ title, subline, icon, color, sortMode, showSort, onSort
               onKeyDown={(event) => {
                 event.stopPropagation()
                 if (event.key === 'Enter') finishTitleEdit()
-                if (event.key === 'Escape') {
-                  setDraftTitle(title)
-                  setEditingTitle(false)
-                }
+                if (event.key === 'Escape') setEditingTitle(false)
               }}
             />
           ) : (
-            <h1 className={onRenameTitle ? 'is-editable' : ''} onDoubleClick={() => onRenameTitle && setEditingTitle(true)} title={onRenameTitle ? 'Double-click to rename' : undefined}>{title}</h1>
+            <h1 className={onRenameTitle ? 'is-editable' : ''} onDoubleClick={beginTitleEdit} title={onRenameTitle ? 'Double-click to rename' : undefined}>{title}</h1>
           )}
         </div>
         {subline && <span className="page-subline">{subline}</span>}
@@ -68,9 +66,7 @@ export function Header({ title, subline, icon, color, sortMode, showSort, onSort
             <span>{sortLabels[sortMode]}</span>
             <ChevronDown />
             <select value={sortMode} onChange={(event) => onSort(event.target.value as SortMode)} aria-label="Sort tasks">
-              <option value="manual">My order</option>
-              <option value="date">Due date</option>
-              <option value="starred">Starred first</option>
+              {Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
         </div>

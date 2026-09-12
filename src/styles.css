@@ -33,7 +33,6 @@
   --c-done: #2aa04f;
   --c-trash: #8e8e93;
   --danger: #e5484d;
-  --done: #2aa04f;
   --on-accent: #ffffff;
 
   --accent: var(--blue);
@@ -83,8 +82,6 @@
   --c-done: #3fca6a;
   --c-trash: #98989f;
   --danger: #ff6369;
-  --done: #3fca6a;
-  --on-accent: #ffffff;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
@@ -191,9 +188,8 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .switch::after { content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 160ms var(--ease); }
 .switch.on { background: var(--c-done); }
 .switch.on::after { transform: translateX(12px); }
-.settings-action { width: 100%; justify-content: flex-start; cursor: default; transition: background 120ms ease; }
+.settings-action { width: 100%; justify-content: flex-start; transition: background 120ms ease; }
 .settings-action:hover { background: var(--surface-2); }
-.settings-action:disabled { opacity: 0.6; }
 .settings-divider { height: 1px; margin: 4px 6px; background: var(--border); }
 .settings-shortcuts { display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 6px; color: var(--text-2); font-size: 12px; }
 .settings-shortcuts span { display: flex; align-items: center; justify-content: space-between; }
@@ -227,7 +223,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .topbar-actions { display: flex; align-items: center; gap: 6px; padding-top: 2px; }
 .select-control { position: relative; display: flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px 0 8px; border-radius: 6px; color: var(--text-2); font-size: 12.5px; transition: background 120ms ease, color 120ms ease; }
 .select-control:hover { color: var(--text); background: var(--surface-2); }
-.select-control select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: default; }
+.select-control select { position: absolute; inset: 0; width: 100%; opacity: 0; }
 .select-control svg:last-child { width: 13px; height: 13px; }
 
 /* ---------- Board (All tasks) ---------- */
@@ -256,7 +252,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .task-stack { display: flex; flex-direction: column; }
 .mini-empty { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 8px; color: var(--text-2); font-size: 13px; }
 .mini-empty svg { color: var(--c-done); }
-.new-list-card { display: flex; align-items: center; gap: 8px; height: 38px; flex: 0 0 auto; margin-top: 0; padding: 0 10px 0 6px; border-radius: 6px; color: var(--text-2); font-size: 14px; transition: background 120ms ease, color 120ms ease; }
+.new-list-card { display: flex; align-items: center; gap: 8px; height: 38px; flex: 0 0 auto; padding: 0 10px 0 6px; border-radius: 6px; color: var(--text-2); font-size: 14px; transition: background 120ms ease, color 120ms ease; }
 .new-list-card:hover { color: var(--text); background: var(--surface-2); }
 .new-list-card > span { display: grid; place-items: center; width: 22px; height: 22px; }
 
@@ -294,7 +290,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .is-completed .task-check > span { border-color: var(--accent); background: var(--accent); }
 
 .task-content { flex: 1; min-width: 0; }
-.task-body { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: flex-start; gap: 2px; padding: 0; border: 0; outline: 0; background: transparent; text-align: left; }
+.task-body { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: flex-start; gap: 2px; outline: 0; text-align: left; }
 .task-title { width: 100%; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
 .task-title-input { width: 100%; height: 24px; margin: -2px 0; padding: 0 5px; border: 1px solid var(--accent); border-radius: 5px; outline: 0; background: var(--surface); font-size: 14px; box-shadow: 0 0 0 3px var(--accent-soft); }
 .is-completed .task-title { color: var(--text-2); text-decoration: line-through; text-decoration-color: var(--text-3); }
@@ -317,12 +313,11 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .inline-subtask.is-done .inline-subtask-check { border-color: var(--accent); background: var(--accent); }
 
 .task-actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 2px; }
-.task-date-button, .star-button, .delete-button, .task-chevron { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 5px; color: var(--text-2); opacity: 0; transition: opacity 120ms ease, background 120ms ease, color 120ms ease; }
+.task-date-button, .star-button, .delete-button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 5px; color: var(--text-2); opacity: 0; transition: opacity 120ms ease, background 120ms ease, color 120ms ease; }
 .task-item:hover :is(.task-date-button, .star-button, .delete-button), :is(.task-date-button, .star-button, .delete-button):focus-visible, .task-date-button.is-open, .star-button.is-starred { opacity: 1; }
-.task-date-button:hover, .task-date-button.is-open, .star-button:hover, .task-chevron:hover { color: var(--text); background: var(--surface-3); }
+.task-date-button:hover, .task-date-button.is-open, .star-button:hover { color: var(--text); background: var(--surface-3); }
 .star-button.is-starred, .icon-button.is-starred { color: var(--c-starred); }
 .delete-button:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
-.task-chevron { display: none; }
 
 /* Completion moment: check pops, title strikes, then the row folds away. */
 .task-item.is-completing .task-check > span { border-color: var(--accent); background: var(--accent); animation: check-ring 480ms ease-out both; }
@@ -339,7 +334,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 /* ---------- Focused list views ---------- */
 
 .focus-scroll { overflow-y: auto; }
-.focus-sheet { width: min(840px, 100%); margin: 0; padding: 4px 32px 120px 32px; }
+.focus-sheet { width: min(840px, 100%); padding: 4px 32px 120px; }
 .focus-summary { display: flex; align-items: center; gap: 12px; min-height: 36px; margin: 0 0 6px; padding: 0 8px; color: var(--text-2); font-size: 13px; }
 .focus-summary > div:first-of-type { flex: 1; }
 .archive-note { margin: 0; }
@@ -350,7 +345,6 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .focus-tasks .task-item, .focus-completed .task-item { border-bottom: 1px solid var(--border); border-radius: 0; }
 .focus-tasks .task-item:last-child { border-bottom-color: transparent; }
 .focus-tasks .task-item:hover, .focus-completed .task-item:hover { border-radius: var(--r-row); }
-.focus-tasks .task-item.drop-before::before { top: -1px; }
 .focus-completed { margin-top: 28px; }
 .focus-section-label { display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 8px; border-bottom: 1px solid var(--border); color: var(--c-done); font-size: 15px; font-weight: 600; }
 .focus-section-label span:last-child { color: var(--text-2); font-size: 12.5px; font-weight: 400; }
@@ -499,7 +493,6 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .toast svg { color: var(--c-done); }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } }
 
-
 /* ---------- Calendar ---------- */
 
 .calendar-area { display: grid; grid-template-columns: minmax(0, 1fr) 268px; height: 100%; }
@@ -518,7 +511,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .cal-weekday-row span { padding-left: 8px; color: var(--text-2); font-size: 12px; font-weight: 500; }
 .cal-weekday-row span:nth-child(n + 6) { color: var(--text-3); }
 .cal-grid { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(0, 1fr); gap: 1px; min-height: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--border); }
-.cal-cell { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; padding: 6px 6px 6px; overflow: hidden; background: var(--bg); transition: background 120ms ease, box-shadow 120ms ease; }
+.cal-cell { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; padding: 6px; overflow: hidden; background: var(--bg); transition: background 120ms ease, box-shadow 120ms ease; }
 .cal-cell.is-outside { background: color-mix(in srgb, var(--text) 2.5%, var(--bg)); }
 .cal-cell.is-outside .cal-daynum { color: var(--text-3); }
 .cal-cell.is-due-day { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c-calendar) 45%, transparent); }
@@ -553,10 +546,10 @@ button.cal-daynum.is-clickable:hover { background: var(--surface-2); }
 .cal-chip-state { margin-left: -3px; color: var(--text); }
 .cal-chip-state:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
 /* A completed task and a focus day marked done look the same: green, checked, struck through. */
-.cal-chip.is-day-done, .cal-chip.is-done { background: color-mix(in srgb, var(--done) 16%, transparent); box-shadow: none; }
-.cal-chip.is-day-done:hover, .cal-chip.is-done:hover { background: color-mix(in srgb, var(--done) 26%, transparent); }
-.cal-chip.is-day-done .cal-chip-title, .cal-chip.is-done .cal-chip-title { text-decoration: line-through; color: color-mix(in srgb, var(--done) 60%, var(--text)); }
-.cal-chip.is-day-done .cal-chip-state svg, .cal-chip.is-done > svg { color: var(--done); }
+.cal-chip.is-day-done, .cal-chip.is-done { background: color-mix(in srgb, var(--c-done) 16%, transparent); box-shadow: none; }
+.cal-chip.is-day-done:hover, .cal-chip.is-done:hover { background: color-mix(in srgb, var(--c-done) 26%, transparent); }
+.cal-chip.is-day-done .cal-chip-title, .cal-chip.is-done .cal-chip-title { text-decoration: line-through; color: color-mix(in srgb, var(--c-done) 60%, var(--text)); }
+.cal-chip.is-day-done .cal-chip-state svg, .cal-chip.is-done > svg { color: var(--c-done); }
 .cal-chip.is-day-missed { background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .cal-chip.is-day-missed:hover { background: color-mix(in srgb, var(--danger) 24%, transparent); }
 .cal-chip.is-day-missed .cal-chip-title { color: var(--danger); }
@@ -576,7 +569,7 @@ button.cal-daynum.is-clickable:hover { background: var(--surface-2); }
 .cal-grid.is-month-block .cal-chip-stack { max-height: 96px; }
 .cal-cell.is-blank { background: color-mix(in srgb, var(--text) 2.5%, var(--bg)); }
 
-.cal-tray { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 12px 12px 12px; border-left: 1px solid var(--border); background: color-mix(in srgb, var(--text) 1.5%, var(--bg)); transition: box-shadow 120ms ease; }
+.cal-tray { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 12px; border-left: 1px solid var(--border); background: color-mix(in srgb, var(--text) 1.5%, var(--bg)); transition: box-shadow 120ms ease; }
 .cal-tray.is-drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
 .cal-tray-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 2px; color: var(--text-2); }
 .cal-tray-head small { flex: 0 0 auto; font-size: 12px; font-variant-numeric: tabular-nums; }
