@@ -48,6 +48,7 @@ export interface Preferences {
   theme: ThemeMode
   sortMode: SortMode
   sidebarCollapsed: boolean
+  sidebarThread: boolean
   launchAtLogin: boolean
 }
 

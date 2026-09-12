@@ -533,6 +533,7 @@ function App() {
         completedCount={completedTasks.length}
         trashCount={data.trash.length}
         launchAtLogin={data.preferences.launchAtLogin}
+        thread={data.preferences.sidebarThread}
         theme={data.preferences.theme}
         query={query}
         searchRef={searchRef}
@@ -544,6 +545,7 @@ function App() {
         onToggle={() => updatePreferences({ sidebarCollapsed: !data.preferences.sidebarCollapsed })}
         onLaunchAtLogin={(launchAtLogin) => { updatePreferences({ launchAtLogin }); showToast(launchAtLogin ? 'Knot will open when you log in' : 'Open at login turned off') }}
         onTheme={setTheme}
+        onThread={(sidebarThread) => updatePreferences({ sidebarThread })}
       />
       <section className="workspace">
         <Header

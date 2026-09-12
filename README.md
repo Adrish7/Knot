@@ -38,6 +38,7 @@ Download the newest `.dmg` from the [releases page](https://github.com/Adrish7/K
 - Drag to reorder tasks; manual, due-date, or starred-first sorting
 - Native macOS notifications and a Dock badge
 - Dark by default, with light and follow-the-Mac options
+- A glowing frame around the sidebar in the app icon's colours, which you can switch off in settings
 - Optional open at login
 - Keyboard shortcuts: `⌘K` to search, `⌘N` for a new task
 - Data saved as JSON in `~/Library/Application Support/Knot`, with an automatic backup of the previous save
@@ -58,7 +59,7 @@ npm run dist       # builds release/Knot-<version>-mac-arm64.dmg
 
 ## Releasing
 
-Pushing a tag like `v1.1.0` runs the GitHub Actions workflow in `.github/workflows/release.yml`, which builds the DMG and attaches it to a GitHub Release for that tag. Bump `version` in `package.json` to match before tagging.
+Pushing a tag like `v1.2.0` runs the GitHub Actions workflow in `.github/workflows/release.yml`, which builds the DMG and attaches it to a GitHub Release for that tag. Bump `version` in `package.json` to match before tagging.
 
 ## License
 

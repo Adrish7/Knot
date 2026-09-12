@@ -1,8 +1,9 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Trash2, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Sparkles, Star, Sun, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { isForToday } from '../format'
 import type { Task, TaskList, ThemeMode, ViewId } from '../types'
 import { ListRing, listProgress } from './ListRing'
+import { SidebarThread } from './SidebarThread'
 
 interface SidebarProps {
   collapsed: boolean
@@ -12,6 +13,7 @@ interface SidebarProps {
   completedCount: number
   trashCount: number
   launchAtLogin: boolean
+  thread: boolean
   theme: ThemeMode
   query: string
   searchRef: React.RefObject<HTMLInputElement | null>
@@ -23,9 +25,10 @@ interface SidebarProps {
   onToggle: () => void
   onLaunchAtLogin: (enabled: boolean) => void
   onTheme: (theme: ThemeMode) => void
+  onThread: (enabled: boolean) => void
 }
 
-export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme }: SidebarProps) {
+export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount, trashCount, launchAtLogin, thread, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onThread }: SidebarProps) {
   const [editingListId, setEditingListId] = useState<string | null>(null)
   const [draftListName, setDraftListName] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -55,7 +58,8 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
   const starredCount = openTasks.filter((task) => task.starred).length
 
   return (
-    <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''}`}>
+    <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''} ${thread ? 'has-thread' : ''}`}>
+      {thread && <SidebarThread />}
       <div className="sidebar-top">
         <button className="icon-button" onClick={onToggle} aria-label={collapsed ? 'Show sidebar' : 'Hide sidebar'} title={collapsed ? 'Show sidebar' : 'Hide sidebar'}>
           {collapsed ? <PanelLeft size={17} /> : <ChevronLeft size={17} />}
@@ -150,6 +154,10 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
             <button className="settings-row settings-action" role="switch" aria-checked={launchAtLogin} onClick={() => onLaunchAtLogin(!launchAtLogin)}>
               <span><Power size={15} />Open at login</span>
               <span className={`switch ${launchAtLogin ? 'on' : ''}`} />
+            </button>
+            <button className="settings-row settings-action" role="switch" aria-checked={thread} onClick={() => onThread(!thread)}>
+              <span><Sparkles size={15} />Sidebar frame</span>
+              <span className={`switch ${thread ? 'on' : ''}`} />
             </button>
             <div className="settings-divider" />
             <div className="settings-shortcuts">

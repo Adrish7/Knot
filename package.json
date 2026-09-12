@@ -1,6 +1,6 @@
 {
   "name": "knot",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A calm, native-feeling task manager for macOS.",
   "main": "electron/main.cjs",
   "author": "Adrish",

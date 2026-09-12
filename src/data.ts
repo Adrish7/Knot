@@ -21,6 +21,7 @@ export function createDefaultPreferences(): Preferences {
     theme: 'dark',
     sortMode: 'manual',
     sidebarCollapsed: false,
+    sidebarThread: true,
     launchAtLogin: false,
   }
 }
@@ -201,6 +202,7 @@ export function normalizeData(value: unknown): KnotData | null {
       theme: oneOf(themes, preferences.theme, defaults.theme),
       sortMode: oneOf(sortModes, preferences.sortMode, defaults.sortMode),
       sidebarCollapsed: typeof preferences.sidebarCollapsed === 'boolean' ? preferences.sidebarCollapsed : defaults.sidebarCollapsed,
+      sidebarThread: typeof preferences.sidebarThread === 'boolean' ? preferences.sidebarThread : defaults.sidebarThread,
       launchAtLogin: typeof preferences.launchAtLogin === 'boolean' ? preferences.launchAtLogin : defaults.launchAtLogin,
     },
   }
