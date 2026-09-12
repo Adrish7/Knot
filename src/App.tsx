@@ -35,7 +35,6 @@ function App() {
   const [listMenu, setListMenu] = useState<{ list: TaskList; x: number; y: number } | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; confirmLabel: string; run: () => void } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-  const [updating, setUpdating] = useState(false)
   const [clockTick, setClockTick] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -322,22 +321,6 @@ function App() {
     }))
   }
 
-  const installUpdate = async () => {
-    if (!window.knot?.installUpdate) {
-      showToast('Updates are available from the installed Mac app.')
-      return
-    }
-    setUpdating(true)
-    try {
-      const result = await window.knot.installUpdate()
-      showToast(result.message)
-      if (!result.ok) setUpdating(false)
-    } catch {
-      setUpdating(false)
-      showToast('The update could not be installed.')
-    }
-  }
-
   const completeTask = (taskId: string, completed: boolean) => {
     setData((current) => {
       const source = current.tasks.find((task) => task.id === taskId)
@@ -543,8 +526,6 @@ function App() {
         onToggle={() => updatePreferences({ sidebarCollapsed: !data.preferences.sidebarCollapsed })}
         onLaunchAtLogin={(launchAtLogin) => { updatePreferences({ launchAtLogin }); showToast(launchAtLogin ? 'Knot will open when you log in' : 'Open at login turned off') }}
         onTheme={setTheme}
-        onUpdate={installUpdate}
-        updating={updating}
       />
       <section className="workspace">
         <Header

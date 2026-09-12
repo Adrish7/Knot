@@ -1,5 +1,4 @@
 const { app, BrowserWindow, ipcMain, nativeTheme, Notification, Menu, powerMonitor } = require('electron')
-const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 
@@ -12,55 +11,7 @@ if (!hasSingleInstanceLock) app.quit()
 const notificationTimers = new Map()
 let notificationRefreshTimer = null
 let mainWindow = null
-let updateInProgress = null
 let lastWakeRevealAt = 0
-
-const installedAppPath = '/Applications/Knot.app'
-const previousAppPath = '/Applications/.Knot-previous.app'
-
-function sourceProjectPath() {
-  return process.env.KNOT_SOURCE_DIR || path.join(app.getPath('home'), 'Coding', 'Knot')
-}
-
-function runProcess(command, args, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
-    let output = ''
-    child.stdout.on('data', (chunk) => { output += chunk.toString() })
-    child.stderr.on('data', (chunk) => { output += chunk.toString() })
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code === 0) resolve(output)
-      else reject(new Error(output.trim().split('\n').slice(-4).join(' ') || `Updater exited with code ${code}`))
-    })
-  })
-}
-
-async function installLatestBuild() {
-  if (!app.isPackaged || process.platform !== 'darwin') {
-    return { ok: false, message: 'Updates are available from the installed Mac app.' }
-  }
-  if (updateInProgress) return updateInProgress
-
-  updateInProgress = (async () => {
-    const projectPath = sourceProjectPath()
-    const scriptPath = path.join(projectPath, 'scripts', 'update-knot.sh')
-    try {
-      await fs.promises.access(scriptPath, fs.constants.R_OK)
-      await runProcess('/bin/zsh', [scriptPath, '--managed'], projectPath)
-      setTimeout(() => {
-        app.relaunch({ execPath: path.join(installedAppPath, 'Contents', 'MacOS', 'Knot') })
-        app.exit(0)
-      }, 900)
-      return { ok: true, message: 'Knot is updated. Restarting now…' }
-    } catch (error) {
-      updateInProgress = null
-      return { ok: false, message: `Update failed: ${error.message}` }
-    }
-  })()
-
-  return updateInProgress
-}
 
 function storePath() {
   return path.join(app.getPath('userData'), 'knot-data.json')
@@ -102,9 +53,24 @@ function setLaunchAtLogin(enabled) {
   return app.getLoginItemSettings().openAtLogin
 }
 
+const themeSources = ['light', 'dark', 'system']
+
+// Knot defaults to dark; the window is painted before the renderer loads, so the saved
+// choice (or the default) must reach nativeTheme first to avoid a flash of the wrong ground.
+async function applySavedTheme() {
+  let theme = 'dark'
+  try {
+    const saved = JSON.parse(await fs.promises.readFile(storePath(), 'utf8'))
+    if (themeSources.includes(saved?.preferences?.theme)) theme = saved.preferences.theme
+  } catch (error) {
+    if (error.code !== 'ENOENT') console.error('Could not read the appearance preference:', error)
+  }
+  nativeTheme.themeSource = theme
+}
+
 async function syncLaunchAtLoginPreference() {
   if (!app.isPackaged || process.platform !== 'darwin') return
-  let enabled = true
+  let enabled = false
   try {
     const saved = JSON.parse(await fs.promises.readFile(storePath(), 'utf8'))
     if (typeof saved?.preferences?.launchAtLogin === 'boolean') enabled = saved.preferences.launchAtLogin
@@ -262,15 +228,13 @@ ipcMain.on('knot:save-sync', (event, data) => {
 })
 
 ipcMain.handle('knot:set-theme', (_event, theme) => {
-  nativeTheme.themeSource = ['light', 'dark', 'system'].includes(theme) ? theme : 'system'
+  nativeTheme.themeSource = themeSources.includes(theme) ? theme : 'dark'
   return nativeTheme.shouldUseDarkColors
 })
 
 ipcMain.handle('knot:set-launch-at-login', (_event, enabled) => {
   return setLaunchAtLogin(enabled)
 })
-
-ipcMain.handle('knot:install-update', installLatestBuild)
 
 app.on('second-instance', () => {
   if (app.isReady()) revealMainWindow(true)
@@ -285,8 +249,7 @@ async function scheduleSavedNotifications() {
 }
 
 app.whenReady().then(async () => {
-  fs.promises.rm(previousAppPath, { recursive: true, force: true }).catch(() => {})
-  await syncLaunchAtLoginPreference()
+  await Promise.all([applySavedTheme(), syncLaunchAtLoginPreference()])
   createMenu()
   createWindow()
   scheduleSavedNotifications()

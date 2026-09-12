@@ -247,7 +247,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
         data-focus-task={kind === 'focus' ? task.id : undefined}
         role="button"
         tabIndex={0}
-        draggable={!task.completed}
+        draggable
         onDragStart={(event) => startDrag(event, task.id, kind === 'focus' ? day : null)}
         onDragEnd={endDrag}
         onClick={() => onOpenTask(task.id)}
@@ -266,7 +266,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
               : dueHere ? <Flag size={9} strokeWidth={2.5} />
               : <span className="cal-chip-dot" />}
           </button>
-        ) : dueHere ? <Flag size={9} strokeWidth={2.5} /> : <span className="cal-chip-dot" />}
+        ) : task.completed ? <Check size={10} strokeWidth={3} /> : dueHere ? <Flag size={9} strokeWidth={2.5} /> : <span className="cal-chip-dot" />}
         <span className="cal-chip-title">{task.title}</span>
         {kind === 'focus' && (
           <button

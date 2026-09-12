@@ -6,5 +6,4 @@ contextBridge.exposeInMainWorld('knot', {
   saveSync: (data) => ipcRenderer.sendSync('knot:save-sync', data),
   setTheme: (theme) => ipcRenderer.invoke('knot:set-theme', theme),
   setLaunchAtLogin: (enabled) => ipcRenderer.invoke('knot:set-launch-at-login', enabled),
-  installUpdate: () => ipcRenderer.invoke('knot:install-update'),
 })

@@ -8,7 +8,6 @@ declare global {
       saveSync: (data: import('./types').KnotData) => boolean
       setTheme: (theme: import('./types').ThemeMode) => Promise<boolean>
       setLaunchAtLogin: (enabled: boolean) => Promise<boolean>
-      installUpdate: () => Promise<{ ok: boolean; message: string }>
     }
   }
 }

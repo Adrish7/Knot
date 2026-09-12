@@ -4,7 +4,7 @@ Personal task manager for macOS. Electron + React + TypeScript, packaged as `/Ap
 
 ## Users
 
-- Single user: Adrish, on a Mac laptop, throughout the working day. Morning planning, quick captures during the day, evening tidy-up. Light and dark environments both real.
+- Single user on a Mac laptop, throughout the working day. Morning planning, quick captures during the day, evening tidy-up. Light and dark environments both real.
 - Job: keep a small number of lists honest, decide what today holds, and plan work onto calendar days without ceremony.
 
 ## Purpose and position

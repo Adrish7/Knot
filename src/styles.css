@@ -99,6 +99,8 @@ body { background: var(--bg); color: var(--text); }
 button, input, textarea, select { font: inherit; color: inherit; letter-spacing: inherit; }
 button { border: 0; padding: 0; background: none; }
 button, select { cursor: default; }
+/* Every mark-done control, in every view, shows the pointer. */
+.task-check, .inline-subtask, .panel-complete, .subtask > button, .cal-chip-state { cursor: pointer; }
 ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 input, textarea { caret-color: var(--accent); }
 input::placeholder, textarea::placeholder { color: var(--text-2); opacity: 1; }
@@ -173,7 +175,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .new-list-button:hover { color: var(--text); background: var(--surface-2); }
 .settings-button.is-open { color: var(--text); background: var(--surface-3); }
 
-.settings-popover { position: absolute; z-index: 30; right: 0; bottom: 36px; width: 236px; padding: 6px; border-radius: var(--r-pop); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); animation: popIn 140ms var(--ease); transform-origin: bottom right; }
+.settings-popover { position: absolute; z-index: 30; left: 0; right: 0; bottom: 36px; padding: 6px; border-radius: var(--r-pop); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); animation: popIn 140ms var(--ease); transform-origin: bottom right; }
 @keyframes popIn { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; padding: 0 8px; border-radius: 6px; font-size: 13px; }
 .settings-row > span:first-child { display: flex; align-items: center; gap: 8px; color: var(--text); }
@@ -192,8 +194,6 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .settings-action { width: 100%; justify-content: flex-start; cursor: default; transition: background 120ms ease; }
 .settings-action:hover { background: var(--surface-2); }
 .settings-action:disabled { opacity: 0.6; }
-.settings-action .is-spinning { animation: spin 850ms linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 .settings-divider { height: 1px; margin: 4px 6px; background: var(--border); }
 .settings-shortcuts { display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 6px; color: var(--text-2); font-size: 12px; }
 .settings-shortcuts span { display: flex; align-items: center; justify-content: space-between; }
@@ -208,7 +208,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .sidebar.is-collapsed .list-more { display: none; }
 .sidebar.is-collapsed .sidebar-footer { flex-direction: column; align-items: center; }
 .sidebar.is-collapsed .new-list-button { padding: 0; width: 28px; justify-content: center; }
-.sidebar.is-collapsed .settings-popover { right: auto; left: 0; transform-origin: bottom left; }
+.sidebar.is-collapsed .settings-popover { right: auto; left: 0; width: 236px; transform-origin: bottom left; }
 
 /* ---------- Page header ---------- */
 
@@ -541,8 +541,6 @@ button.cal-daynum.is-clickable:hover { background: var(--surface-2); }
 .cal-chip-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-chip.is-due { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chip-color, var(--accent)) 45%, transparent); color: var(--text-2); }
 .cal-chip.is-due:hover { background: color-mix(in srgb, var(--chip-color, var(--accent)) 10%, transparent); color: var(--text); }
-.cal-chip.is-done { opacity: 0.5; cursor: default; }
-.cal-chip.is-done .cal-chip-title { text-decoration: line-through; }
 .cal-chip.is-dragging { opacity: 0.35; }
 .cal-chip.drop-before::before, .cal-chip.drop-after::before { content: ''; position: absolute; z-index: 3; left: 2px; right: 2px; height: 2px; border-radius: 99px; background: var(--accent); pointer-events: none; }
 .cal-chip.drop-before::before { top: -2px; }
@@ -554,10 +552,11 @@ button.cal-daynum.is-clickable:hover { background: var(--surface-2); }
 .cal-chip-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .cal-chip-state { margin-left: -3px; color: var(--text); }
 .cal-chip-state:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
-.cal-chip.is-day-done { background: color-mix(in srgb, var(--done) 16%, transparent); }
-.cal-chip.is-day-done:hover { background: color-mix(in srgb, var(--done) 26%, transparent); }
-.cal-chip.is-day-done .cal-chip-title { text-decoration: line-through; color: color-mix(in srgb, var(--done) 60%, var(--text)); }
-.cal-chip.is-day-done .cal-chip-state svg { color: var(--done); }
+/* A completed task and a focus day marked done look the same: green, checked, struck through. */
+.cal-chip.is-day-done, .cal-chip.is-done { background: color-mix(in srgb, var(--done) 16%, transparent); box-shadow: none; }
+.cal-chip.is-day-done:hover, .cal-chip.is-done:hover { background: color-mix(in srgb, var(--done) 26%, transparent); }
+.cal-chip.is-day-done .cal-chip-title, .cal-chip.is-done .cal-chip-title { text-decoration: line-through; color: color-mix(in srgb, var(--done) 60%, var(--text)); }
+.cal-chip.is-day-done .cal-chip-state svg, .cal-chip.is-done > svg { color: var(--done); }
 .cal-chip.is-day-missed { background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .cal-chip.is-day-missed:hover { background: color-mix(in srgb, var(--danger) 24%, transparent); }
 .cal-chip.is-day-missed .cal-chip-title { color: var(--danger); }

@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, Ellipsis, Inbox, PanelLeft, Plus, Power, RefreshCw, Search, Settings2, Star, Sun, Trash2, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { todayKey } from '../format'
 import type { Task, TaskList, ThemeMode, ViewId } from '../types'
@@ -23,11 +23,9 @@ interface SidebarProps {
   onToggle: () => void
   onLaunchAtLogin: (enabled: boolean) => void
   onTheme: (theme: ThemeMode) => void
-  onUpdate: () => void
-  updating: boolean
 }
 
-export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onUpdate, updating }: SidebarProps) {
+export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme }: SidebarProps) {
   const [editingListId, setEditingListId] = useState<string | null>(null)
   const [draftListName, setDraftListName] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -155,10 +153,6 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
             <button className="settings-row settings-action" role="switch" aria-checked={launchAtLogin} onClick={() => onLaunchAtLogin(!launchAtLogin)}>
               <span><Power size={15} />Open at login</span>
               <span className={`switch ${launchAtLogin ? 'on' : ''}`} />
-            </button>
-            <div className="settings-divider" />
-            <button className="settings-row settings-action" onClick={onUpdate} disabled={updating}>
-              <span><RefreshCw size={15} className={updating ? 'is-spinning' : ''} />{updating ? 'Installing update…' : 'Update Knot'}</span>
             </button>
             <div className="settings-divider" />
             <div className="settings-shortcuts">

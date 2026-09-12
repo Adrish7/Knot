@@ -1,61 +1,65 @@
 # Knot
 
-Knot is a native-feeling macOS task manager built with Electron, React, and TypeScript. It combines the familiar Google Tasks workflow with a calmer board layout, focused list views, local desktop persistence, reminders, recurring tasks, and carefully matched light and dark themes.
+Knot is a calm, native-feeling task manager for macOS. Lists, a Today view, a calendar, starred tasks, reminders, and recurring tasks, all stored locally on your Mac.
 
-## Install the Mac app
+## Download
 
-1. Open `release/Knot-1.0.1-arm64.dmg`.
+**[Download the latest Knot for Mac](https://github.com/Adrish7/Knot/releases/latest)**
+
+Requirements: an Apple Silicon Mac (M1 or later) running macOS 12 or newer. Intel Macs are not supported.
+
+1. Download the `.dmg` from the link above and open it.
 2. Drag **Knot** into **Applications**.
-3. Launch Knot from the Applications folder.
-4. Leave **Open at login** enabled at the bottom of Knot's sidebar.
+3. Open Knot from Applications or Spotlight.
 
-## Update the installed app
+### First launch
 
-Open Knot from Spotlight and click **Update Knot** at the bottom of the sidebar. Knot rebuilds from this project folder, safely replaces `/Applications/Knot.app`, and relaunches itself.
+Knot is not signed with an Apple developer certificate, so macOS blocks it the first time. This only happens once.
 
-As a fallback, double-click `Update Knot.command` in this folder or run `npm run update:app`.
+1. Open Knot. macOS will say it cannot verify the app. Click **Done**.
+2. Open **System Settings > Privacy & Security** and scroll down to the **Security** section.
+3. Next to the message about Knot, click **Open Anyway**, then confirm.
 
-This local build is not notarized for public distribution. If macOS blocks the first launch, try opening Knot once, then go to **Apple menu > System Settings > Privacy & Security**, scroll to **Security**, and choose **Open Anyway** for Knot.
-
-## Open automatically
-
-Knot enables **Open at login** by default. The sidebar switch updates the native macOS login-item setting. Knot also listens for the Mac's wake event and brings its window forward when the computer resumes after the lid opens.
-
-To verify it in macOS:
-
-1. Open **Apple menu > System Settings**.
-2. Select **General**.
-3. Open **Login Items & Extensions**.
-4. Confirm **Knot** appears under **Open at Login**.
-
-Install Knot in Applications before enabling the setting so macOS records its final location. Closing and reopening the MacBook lid wakes the existing Knot process and brings its window forward; **Open at login** covers restarts, shutdowns, and signing out and back in.
-
-## Included features
-
-- Create, rename, and delete lists
-- Open each list's three-dot menu from either the sidebar or All Tasks board
-- Board, focused-list, Today, Starred, and search views
-- Create, edit, complete, delete, reorder, and move tasks
-- Double-click task and list names to edit them in place
-- Use the calendar button in quick-add to create a task and open its details immediately
-- Notes, subtasks, due date/time, reminders, and recurrence
-- Manual, due-date, and starred-first sorting
-- Collapsible completed tasks
-- Light, dark, and system themes
-- Native macOS notifications and Dock badge
-- Native JSON persistence in the user's Application Support folder
-- Automatic previous-save backup and final-save flush when the app closes
-- Keyboard shortcuts: `Command-K` for search and `Command-N` for a new task
-
-## Develop and build
+If macOS instead says the app is "damaged", run this once in Terminal and open Knot again:
 
 ```bash
-npm install
-npm run dev
-npm run typecheck
-npm run build
-npm run package
-npm run dist
+xattr -dr com.apple.quarantine /Applications/Knot.app
 ```
 
-`npm run package:signed` is available when a configured Apple signing identity and unlocked keychain are present.
+### Updating
+
+Download the newest `.dmg` from the [releases page](https://github.com/Adrish7/Knot/releases) and drag Knot into Applications again, replacing the old copy. Your tasks are kept; they live in your Application Support folder, not inside the app.
+
+## Features
+
+- Lists with a colour each, and an All tasks board showing every list side by side
+- Today, Calendar, Starred, Completed, and Recently deleted views
+- Notes, subtasks, due date and time, reminders, and recurrence
+- Drag to reorder tasks; manual, due-date, or starred-first sorting
+- Native macOS notifications and a Dock badge
+- Dark by default, with light and follow-the-Mac options
+- Optional open at login
+- Keyboard shortcuts: `⌘K` to search, `⌘N` for a new task
+- Data saved as JSON in `~/Library/Application Support/Knot`, with an automatic backup of the previous save
+
+## Build from source
+
+You need Node.js 20 or newer.
+
+```bash
+git clone https://github.com/Adrish7/Knot.git
+cd Knot
+npm install
+npm run dev        # runs Knot in development with live reload
+npm run dist       # builds release/Knot-<version>-mac-arm64.dmg
+```
+
+`npm run typecheck` checks types and `npm run package` builds an unpacked `.app` in `release/`.
+
+## Releasing
+
+Pushing a tag like `v1.1.0` runs the GitHub Actions workflow in `.github/workflows/release.yml`, which builds the DMG and attaches it to a GitHub Release for that tag. Bump `version` in `package.json` to match before tagging.
+
+## License
+
+[MIT](LICENSE)

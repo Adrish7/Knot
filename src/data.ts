@@ -17,10 +17,11 @@ const themes: Preferences['theme'][] = ['light', 'dark', 'system']
 
 export function createDefaultPreferences(): Preferences {
   return {
-    theme: 'system',
+    // Dark is the out-of-the-box appearance; a saved choice of light, dark or system always wins.
+    theme: 'dark',
     sortMode: 'manual',
     sidebarCollapsed: false,
-    launchAtLogin: true,
+    launchAtLogin: false,
   }
 }
 
