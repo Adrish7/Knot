@@ -4,7 +4,7 @@ Knot is a calm, native-feeling task manager for macOS. Lists, a Today view, a ca
 
 ## Download
 
-**[Download the latest Knot for Mac](https://github.com/Adrish7/Knot/releases/latest)**
+**[Download Knot v1.2.0 for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/download/v1.2.0/Knot-1.2.0-mac-arm64.dmg)**
 
 Requirements: an Apple Silicon Mac (M1 or later) running macOS 12 or newer. Intel Macs are not supported.
 
@@ -38,7 +38,6 @@ Download the newest `.dmg` from the [releases page](https://github.com/Adrish7/K
 - Drag to reorder tasks; manual, due-date, or starred-first sorting
 - Native macOS notifications and a Dock badge
 - Dark by default, with light and follow-the-Mac options
-- A glowing frame around the sidebar in the app icon's colours, which you can switch off in settings
 - Optional open at login
 - Keyboard shortcuts: `⌘K` to search, `⌘N` for a new task
 - Data saved as JSON in `~/Library/Application Support/Knot`, with an automatic backup of the previous save
