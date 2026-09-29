@@ -83,6 +83,8 @@ function persistData(data) {
 
 function setLaunchAtLogin(enabled) {
   if (!app.isPackaged || process.platform !== 'darwin') return false
+  // macOS refuses to unregister a login item that was never registered, so only call it on a change.
+  if (app.getLoginItemSettings().openAtLogin === Boolean(enabled)) return Boolean(enabled)
   app.setLoginItemSettings({
     openAtLogin: Boolean(enabled),
     openAsHidden: false,

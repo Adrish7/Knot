@@ -11,7 +11,7 @@ This link always downloads the newest release.
 Requirements: an Apple Silicon Mac (M1 or later) running macOS 12 or newer. Intel Macs are not supported.
 
 1. Download the `.dmg` from the link above and open it.
-2. Drag **Knot** into **Applications**.
+2. Drag **Knot** into **Applications**, then eject the disk image. Don't run Knot from inside the disk image.
 3. Open Knot from Applications or Spotlight.
 
 ### First launch
@@ -22,7 +22,7 @@ Knot is not signed with an Apple developer certificate, so macOS blocks it the f
 2. Open **System Settings > Privacy & Security** and scroll down to the **Security** section.
 3. Next to the message about Knot, click **Open Anyway**, then confirm.
 
-If macOS instead says the app is "damaged", run this once in Terminal and open Knot again:
+Downloads of v1.3.0 and earlier could show "Knot is damaged and can't be opened" instead. Download the latest version, or run this once in Terminal and open Knot again:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Knot.app
