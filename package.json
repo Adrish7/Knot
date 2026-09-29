@@ -1,6 +1,6 @@
 {
   "name": "knot",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "A calm, native-feeling task manager for macOS.",
   "main": "electron/main.cjs",
   "author": "Adrish",
@@ -11,6 +11,7 @@
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env ELECTRON_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
     "dev:web": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
+    "downloads": "node scripts/downloads.mjs",
     "build": "npm run typecheck && vite build",
     "package": "npm run icons:check && npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir --arm64 --publish never",
     "dist": "npm run icons:check && npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --arm64 --publish never"
@@ -66,7 +67,7 @@
         "width": 560,
         "height": 380
       },
-      "artifactName": "Knot-${version}-mac-arm64.${ext}"
+      "artifactName": "Knot-mac-arm64.${ext}"
     }
   }
 }

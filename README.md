@@ -4,7 +4,9 @@ Knot is a calm, native-feeling task manager for macOS. Lists, a Today view, a ca
 
 ## Download
 
-**[Download Knot v1.2.0 for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/download/v1.2.0/Knot-1.2.0-mac-arm64.dmg)**
+**[Download Knot for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/latest/download/Knot-mac-arm64.dmg)**
+
+This link always downloads the newest release.
 
 Requirements: an Apple Silicon Mac (M1 or later) running macOS 12 or newer. Intel Macs are not supported.
 
@@ -40,7 +42,8 @@ Download the newest `.dmg` from the [releases page](https://github.com/Adrish7/K
 - Dark by default, with light and follow-the-Mac options
 - Optional open at login
 - Keyboard shortcuts: `⌘K` to search, `⌘N` for a new task
-- Data saved as JSON in `~/Library/Application Support/Knot`, with an automatic backup of the previous save
+- Data saved as JSON in `~/Library/Application Support/Knot`, with a backup of the previous save and a daily copy for the last 7 days in the `Backups` folder
+- Export and import your data from Settings, for example to move to a new Mac
 
 ## Build from source
 
@@ -51,14 +54,16 @@ git clone https://github.com/Adrish7/Knot.git
 cd Knot
 npm install
 npm run dev        # runs Knot in development with live reload
-npm run dist       # builds release/Knot-<version>-mac-arm64.dmg
+npm run dist       # builds release/Knot-mac-arm64.dmg
 ```
 
 `npm run typecheck` checks types and `npm run package` builds an unpacked `.app` in `release/`.
 
 ## Releasing
 
-Pushing a tag like `v1.2.0` runs the GitHub Actions workflow in `.github/workflows/release.yml`, which builds the DMG and attaches it to a GitHub Release for that tag. Bump `version` in `package.json` to match before tagging.
+Pushing a tag like `v1.2.0` runs the GitHub Actions workflow in `.github/workflows/release.yml`, which builds the DMG and attaches it to a GitHub Release for that tag. Bump `version` in `package.json` to match before tagging. The README download link points at the latest release, so it never needs editing.
+
+`npm run downloads` prints how many times each release has been downloaded.
 
 ## License
 

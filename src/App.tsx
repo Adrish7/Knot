@@ -50,7 +50,7 @@ function App() {
   const [createListOpen, setCreateListOpen] = useState(false)
   const [renameList, setRenameList] = useState<TaskList | null>(null)
   const [listMenu, setListMenu] = useState<{ list: TaskList; x: number; y: number } | null>(null)
-  const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; confirmLabel: string; run: () => void } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; confirmLabel: string; run: () => void | Promise<void> } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   // Bumped once a minute so day-relative views (Today, due labels) roll over at midnight.
   const [clockTick, setClockTick] = useState(0)
@@ -502,6 +502,47 @@ function App() {
     showToast(theme === 'system' ? 'Appearance follows your Mac' : theme === 'light' ? 'Light appearance' : 'Dark appearance')
   }
 
+  const exportData = async () => {
+    try {
+      if (await window.knot?.exportData(data)) showToast('Data exported')
+    } catch {
+      showToast('Could not export data.')
+    }
+  }
+
+  const importData = async () => {
+    let imported: KnotData | null
+    try {
+      const file = await window.knot?.importData()
+      if (file == null) return
+      imported = normalizeData(file)
+    } catch {
+      imported = null
+    }
+    if (!imported) {
+      showToast('That file is not a Knot backup.')
+      return
+    }
+    const next = imported
+    setConfirmAction({
+      title: 'Import data',
+      message: `Your lists and tasks will be replaced by the ${next.tasks.length} ${next.tasks.length === 1 ? 'task' : 'tasks'} in this file. A copy of your current data is kept in Knot’s Backups folder.`,
+      confirmLabel: 'Replace',
+      run: async () => {
+        try {
+          await window.knot?.snapshotBeforeImport()
+        } catch {
+          showToast('Could not back up current data, so nothing was imported.')
+          return
+        }
+        setData(next)
+        setSelectedView('all')
+        setSelectedTaskId(null)
+        showToast('Data imported')
+      },
+    })
+  }
+
   const openListMenu = (list: TaskList, anchor: HTMLElement) => {
     const rect = anchor.getBoundingClientRect()
     const width = 172
@@ -544,6 +585,8 @@ function App() {
         onToggle={() => updatePreferences({ sidebarCollapsed: !data.preferences.sidebarCollapsed })}
         onLaunchAtLogin={(launchAtLogin) => { updatePreferences({ launchAtLogin }); showToast(launchAtLogin ? 'Knot will open when you log in' : 'Open at login turned off') }}
         onTheme={setTheme}
+        onExport={window.knot ? exportData : undefined}
+        onImport={window.knot ? importData : undefined}
       />
       <section className="workspace">
         <Header

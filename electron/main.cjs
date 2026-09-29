@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeTheme, Notification, Menu, powerMonitor } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, Menu, powerMonitor } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 
@@ -21,6 +21,43 @@ function backupStorePath() {
   return path.join(app.getPath('userData'), 'knot-data.backup.json')
 }
 
+// One snapshot per day, taken before the first save of that day, so a mistake can be undone
+// even after the rolling backup has been overwritten by later saves.
+const DAILY_SNAPSHOTS_KEPT = 7
+
+function snapshotDirectory() {
+  return path.join(app.getPath('userData'), 'Backups')
+}
+
+function localDayKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function snapshotFiles() {
+  try {
+    return fs.readdirSync(snapshotDirectory())
+      .filter((name) => /^knot-data-\d{4}-\d{2}-\d{2}\.json$/.test(name))
+      .sort()
+      .reverse()
+      .map((name) => path.join(snapshotDirectory(), name))
+  } catch (error) {
+    if (error.code !== 'ENOENT') console.error('Could not list the daily backups:', error)
+    return []
+  }
+}
+
+function takeDailySnapshot(source) {
+  const target = path.join(snapshotDirectory(), `knot-data-${localDayKey()}.json`)
+  if (fs.existsSync(target)) return
+  fs.mkdirSync(snapshotDirectory(), { recursive: true })
+  fs.copyFileSync(source, target)
+  for (const stale of snapshotFiles().slice(DAILY_SNAPSHOTS_KEPT)) fs.rmSync(stale, { force: true })
+}
+
+function isKnotData(value) {
+  return Array.isArray(value?.lists) && Array.isArray(value?.tasks)
+}
+
 async function readJsonFile(target) {
   return JSON.parse(await fs.promises.readFile(target, 'utf8'))
 }
@@ -31,8 +68,9 @@ function persistData(data) {
   fs.mkdirSync(path.dirname(target), { recursive: true })
   try {
     const existing = JSON.parse(fs.readFileSync(target, 'utf8'))
-    if (Array.isArray(existing?.lists) && Array.isArray(existing?.tasks)) {
+    if (isKnotData(existing)) {
       fs.copyFileSync(target, backupStorePath())
+      takeDailySnapshot(target)
     }
   } catch (error) {
     if (error.code !== 'ENOENT') console.error('Could not refresh the data backup:', error)
@@ -194,17 +232,58 @@ ipcMain.handle('knot:load', async () => {
     if (error.code === 'ENOENT') return null
     const corruptCopy = path.join(app.getPath('userData'), `knot-data.corrupt-${Date.now()}.json`)
     await fs.promises.copyFile(storePath(), corruptCopy).catch(() => {})
-    try {
-      const backup = await readJsonFile(backupStorePath())
-      await fs.promises.copyFile(backupStorePath(), storePath())
-      return backup
-    } catch {
-      throw error
+    // Fall back to the rolling backup, then to the newest daily snapshot that still reads.
+    for (const candidate of [backupStorePath(), ...snapshotFiles()]) {
+      try {
+        const recovered = await readJsonFile(candidate)
+        if (!isKnotData(recovered)) continue
+        await fs.promises.copyFile(candidate, storePath())
+        return recovered
+      } catch {
+        // Try the next copy.
+      }
     }
+    throw error
   }
 })
 
 ipcMain.handle('knot:save', (_event, data) => persistData(data))
+
+ipcMain.handle('knot:export', async (event, data) => {
+  const owner = BrowserWindow.fromWebContents(event.sender)
+  const { canceled, filePath } = await dialog.showSaveDialog(owner, {
+    title: 'Export Knot data',
+    defaultPath: path.join(app.getPath('documents'), `Knot Backup ${localDayKey()}.json`),
+    filters: [{ name: 'Knot backup', extensions: ['json'] }],
+  })
+  if (canceled || !filePath) return false
+  await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8')
+  return true
+})
+
+// Returns the parsed file for the renderer to validate, or null when the user cancels.
+ipcMain.handle('knot:import', async (event) => {
+  const owner = BrowserWindow.fromWebContents(event.sender)
+  const { canceled, filePaths } = await dialog.showOpenDialog(owner, {
+    title: 'Import Knot data',
+    defaultPath: app.getPath('documents'),
+    filters: [{ name: 'Knot backup', extensions: ['json'] }],
+    properties: ['openFile'],
+  })
+  if (canceled || !filePaths[0]) return null
+  return readJsonFile(filePaths[0])
+})
+
+// Keeps a copy of the data being replaced so an import can be undone by hand.
+ipcMain.handle('knot:snapshot-before-import', async () => {
+  try {
+    fs.mkdirSync(snapshotDirectory(), { recursive: true })
+    await fs.promises.copyFile(storePath(), path.join(snapshotDirectory(), `before-import-${Date.now()}.json`))
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
+  return true
+})
 
 ipcMain.on('knot:save-sync', (event, data) => {
   try {

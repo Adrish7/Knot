@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Trash2, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, Download, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Trash2, Upload, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { isForToday } from '../format'
 import type { Task, TaskList, ThemeMode, ViewId } from '../types'
@@ -23,9 +23,11 @@ interface SidebarProps {
   onToggle: () => void
   onLaunchAtLogin: (enabled: boolean) => void
   onTheme: (theme: ThemeMode) => void
+  onExport?: () => void
+  onImport?: () => void
 }
 
-export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme }: SidebarProps) {
+export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport }: SidebarProps) {
   const [editingListId, setEditingListId] = useState<string | null>(null)
   const [draftListName, setDraftListName] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -151,6 +153,15 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
               <span><Power size={15} />Open at login</span>
               <span className={`switch ${launchAtLogin ? 'on' : ''}`} />
             </button>
+            {onExport && onImport && <>
+              <div className="settings-divider" />
+              <button className="settings-row settings-action" onClick={() => { setSettingsOpen(false); onExport() }}>
+                <span><Download size={15} />Export data…</span>
+              </button>
+              <button className="settings-row settings-action" onClick={() => { setSettingsOpen(false); onImport() }}>
+                <span><Upload size={15} />Import data…</span>
+              </button>
+            </>}
             <div className="settings-divider" />
             <div className="settings-shortcuts">
               <span><span>Search</span><b><kbd>⌘</kbd><kbd>K</kbd></b></span>
