@@ -605,6 +605,7 @@ function App() {
             tasks={data.tasks}
             lists={sortedLists}
             onOpenTask={setSelectedTaskId}
+            onRenameTask={(taskId, title) => updateTask(taskId, { title })}
             onAddFocusDate={addFocusDate}
             onMoveFocusDate={moveFocusDate}
             onRemoveFocusDate={removeFocusDate}

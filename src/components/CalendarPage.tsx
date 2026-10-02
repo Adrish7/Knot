@@ -8,6 +8,7 @@ interface CalendarPageProps {
   tasks: Task[]
   lists: TaskList[]
   onOpenTask: (taskId: string) => void
+  onRenameTask: (taskId: string, title: string) => void
   onAddFocusDate: (taskId: string, day: string, beforeTaskId: string | null) => void
   onMoveFocusDate: (taskId: string, fromDay: string, toDay: string, beforeTaskId: string | null) => void
   onRemoveFocusDate: (taskId: string, day: string) => void
@@ -31,6 +32,7 @@ interface DropHint {
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const YEAR_MONTHS_BACK = 12
 const YEAR_MONTHS_FORWARD = 24
+const OPEN_DELAY_MS = 220
 const monthYear = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' })
 const longDay = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
 const monthDay = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
@@ -59,7 +61,7 @@ function monthGridDays(monthDate: Date) {
   return Array.from({ length: Math.ceil(span / 7) * 7 }, (_, index) => addDays(start, index))
 }
 
-export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveFocusDate, onRemoveFocusDate, onSetFocusStatus, onAddTaskOnDay, onAddTask }: CalendarPageProps) {
+export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocusDate, onMoveFocusDate, onRemoveFocusDate, onSetFocusStatus, onAddTaskOnDay, onAddTask }: CalendarPageProps) {
   const [view, setView] = useState<CalView>('month')
   const [cursor, setCursor] = useState(() => new Date())
   const [drag, setDrag] = useState<DragInfo | null>(null)
@@ -68,7 +70,12 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
   const [quickTitle, setQuickTitle] = useState('')
   const [trayTitle, setTrayTitle] = useState('')
   const [trayList, setTrayList] = useState('all')
+  const [renaming, setRenaming] = useState<string | null>(null) // the slot being renamed: `${day}:${kind}:${taskId}` or `tray:${taskId}`
+  const [draftTitle, setDraftTitle] = useState('')
   const yearRef = useRef<HTMLDivElement>(null)
+  const openTimer = useRef(0)
+
+  useEffect(() => () => window.clearTimeout(openTimer.current), [])
 
   const today = todayKey()
   const listById = useMemo(() => new Map(lists.map((list) => [list.id, list])), [lists])
@@ -228,25 +235,69 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
     setQuickAddDay(null)
   }
 
-  const renderChip = (task: Task, day: string, kind: 'focus' | 'due', dropEdge: 'before' | 'after' | null) => {
+  // A click opens the task after a short wait, so the second click of a double-click can rename
+  // it in place instead of landing on the details panel's scrim.
+  const clickTask = (event: React.MouseEvent, taskId: string) => {
+    window.clearTimeout(openTimer.current)
+    if (event.detail > 1) return
+    openTimer.current = window.setTimeout(() => onOpenTask(taskId), OPEN_DELAY_MS)
+  }
+
+  const beginRename = (event: React.MouseEvent, task: Task, slot: string) => {
+    if (event.target instanceof Element && event.target.closest('button')) return
+    window.clearTimeout(openTimer.current)
+    setDraftTitle(task.title)
+    setRenaming(slot)
+  }
+
+  const finishRename = (task: Task) => {
+    const title = draftTitle.trim()
+    setRenaming(null)
+    if (title && title !== task.title) onRenameTask(task.id, title)
+  }
+
+  const renderTitle = (task: Task, slot: string, className: string, inputClassName: string) => renaming === slot ? (
+    <input
+      className={inputClassName}
+      value={draftTitle}
+      maxLength={500}
+      autoFocus
+      aria-label="Task title"
+      onFocus={(event) => event.currentTarget.select()}
+      onClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onChange={(event) => setDraftTitle(event.target.value)}
+      onBlur={() => finishRename(task)}
+      onKeyDown={(event) => {
+        event.stopPropagation()
+        if (event.key === 'Enter') { event.preventDefault(); finishRename(task) }
+        if (event.key === 'Escape') { event.preventDefault(); setRenaming(null) }
+      }}
+    />
+  ) : <span className={className}>{task.title}</span>
+
+  const renderChip =(task: Task, day: string, kind: 'focus' | 'due', dropEdge: 'before' | 'after' | null) => {
     const list = task.listId ? listById.get(task.listId) : undefined
     const dueHere = task.dueAt ? dateKey(new Date(task.dueAt)) === day : false
     const dragging = drag?.taskId === task.id && drag.fromDay === (kind === 'focus' ? day : null)
     const status = kind === 'focus' ? task.focusStatus[day] : undefined
     const nextStatus: FocusStatus | null = status === 'done' ? 'missed' : status === 'missed' ? null : 'done'
     const statusHint = status === 'done' ? 'Done this day — click to mark not done' : status === 'missed' ? 'Not done — click to clear' : 'Mark done for this day'
+    const slot = `${day}:${kind}:${task.id}`
+    const editing = renaming === slot
     return (
       <div
         key={`${task.id}:${kind}`}
-        className={`cal-chip ${kind === 'due' ? 'is-due' : ''} ${task.completed ? 'is-done' : ''} ${status === 'done' ? 'is-day-done' : ''} ${status === 'missed' ? 'is-day-missed' : ''} ${dragging ? 'is-dragging' : ''} ${dropEdge ? `drop-${dropEdge}` : ''}`}
+        className={`cal-chip ${kind === 'due' ? 'is-due' : ''} ${task.completed ? 'is-done' : ''} ${status === 'done' ? 'is-day-done' : ''} ${status === 'missed' ? 'is-day-missed' : ''} ${dragging ? 'is-dragging' : ''} ${dropEdge ? `drop-${dropEdge}` : ''} ${editing ? 'is-editing' : ''}`}
         style={{ '--chip-color': list?.color ?? 'var(--accent)' } as React.CSSProperties}
         data-focus-task={kind === 'focus' ? task.id : undefined}
         role="button"
         tabIndex={0}
-        draggable
+        draggable={!editing}
         onDragStart={(event) => startDrag(event, task.id, kind === 'focus' ? day : null)}
         onDragEnd={endDrag}
-        onClick={() => onOpenTask(task.id)}
+        onClick={(event) => clickTask(event, task.id)}
+        onDoubleClick={(event) => beginRename(event, task, slot)}
         onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenTask(task.id) } }}
         title={kind === 'due' ? `${task.title} — due, drag to plan a focus day` : task.title}
       >
@@ -263,8 +314,8 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
               : <span className="cal-chip-dot" />}
           </button>
         ) : task.completed ? <Check size={10} strokeWidth={3} /> : dueHere ? <Flag size={9} strokeWidth={2.5} /> : <span className="cal-chip-dot" />}
-        <span className="cal-chip-title">{task.title}</span>
-        {kind === 'focus' && (
+        {renderTitle(task, slot, 'cal-chip-title', 'cal-chip-input')}
+        {kind === 'focus' && !editing && (
           <button
             className="cal-chip-remove"
             onClick={(event) => { event.stopPropagation(); onRemoveFocusDate(task.id, day) }}
@@ -424,21 +475,23 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
           {trayTasks.map((task) => {
             const list = task.listId ? listById.get(task.listId) : undefined
             const nextFocus = task.focusDates.find((day) => day >= today) ?? task.focusDates[task.focusDates.length - 1]
+            const slot = `tray:${task.id}`
             return (
               <div
                 key={task.id}
                 className={`cal-tray-item ${drag?.taskId === task.id ? 'is-dragging' : ''}`}
                 role="button"
                 tabIndex={0}
-                draggable
+                draggable={renaming !== slot}
                 onDragStart={(event) => startDrag(event, task.id, null)}
                 onDragEnd={endDrag}
-                onClick={() => onOpenTask(task.id)}
+                onClick={(event) => clickTask(event, task.id)}
+                onDoubleClick={(event) => beginRename(event, task, slot)}
                 onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenTask(task.id) } }}
               >
                 <span className="cal-chip-dot" style={{ '--chip-color': list?.color ?? 'var(--accent)' } as React.CSSProperties} />
                 <div className="cal-tray-item-body">
-                  <span className="cal-tray-title">{task.title}</span>
+                  {renderTitle(task, slot, 'cal-tray-title', 'cal-quick cal-tray-input')}
                   {(task.dueAt || nextFocus) && (
                     <span className="cal-tray-meta">
                       {task.dueAt && <span className={`cal-tray-due ${isOverdue(task) ? 'overdue' : ''}`}>Due {formatDue(task.dueAt)}</span>}
@@ -455,7 +508,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onAddFocusDate, onMoveF
             </div>
           )}
         </div>
-        <p className="cal-tray-hint">Drag tasks onto a day, or up and down within it to reorder. ⌥-drag a chip to add another day. Drop a chip here to unplan it.</p>
+        <p className="cal-tray-hint">Drag tasks onto a day, or up and down within it to reorder. ⌥-drag a chip to add another day. Drop a chip here to unplan it. Double-click a task to rename it.</p>
       </aside>
     </main>
   )
