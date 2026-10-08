@@ -1,9 +1,10 @@
-import { Bell, CalendarClock, CalendarDays, Check, ChevronDown, Clock3, ListChecks, Play, Plus, Repeat2, Star, Timer, Trash2, X } from 'lucide-react'
+import { Bell, CalendarClock, CalendarDays, Check, ChevronDown, Clock3, ListChecks, Play, Plus, Repeat2, Star, Tag, Timer, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { uid } from '../data'
 import { completedSubtasks, formatDayKey } from '../format'
 import { isRunning } from '../time'
 import { DateTimePicker, FocusDayPicker } from './DateTimePicker'
+import { TagPicker } from './Tags'
 import { TimeSpentPicker } from './TimeSpentPicker'
 import type { Recurrence, Task, TaskList } from '../types'
 
@@ -58,6 +59,10 @@ export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onStopw
             <span><ListChecks size={16} />List</span>
             <span className="detail-input select-wrap"><select value={task.listId ?? ''} onChange={(event) => onUpdate({ listId: event.target.value || null })}>{task.listId === null && <option value="">Calendar only</option>}{lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}</select><ChevronDown size={14} /></span>
           </label>
+          <div className="detail-row">
+            <span><Tag size={16} />Tags</span>
+            <TagPicker variant="field" selected={task.tagIds} taskTitle={task.title} onChange={(tagIds) => onUpdate({ tagIds })} />
+          </div>
           <div className="detail-row">
             <span><CalendarClock size={16} />Due</span>
             <DateTimePicker value={task.dueAt} placeholder="Add a date" onChange={(dueAt) => onUpdate({ dueAt })} />

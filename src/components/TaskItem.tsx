@@ -2,6 +2,7 @@ import { Bell, Calendar, CalendarDays, Check, ChevronDown, ChevronRight, GripVer
 import { useEffect, useRef, useState } from 'react'
 import { completedSubtasks, formatDayKey, formatDue, isOverdue, isToday, todayKey } from '../format'
 import { DateTimePicker } from './DateTimePicker'
+import { TagChips } from './Tags'
 import { TimeSpentPicker } from './TimeSpentPicker'
 import { hasTime } from '../time'
 import type { Task } from '../types'
@@ -172,6 +173,7 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
                 {subtasksOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
               </button>
             )}
+            <TagChips tagIds={task.tagIds} />
             {listName && <span className="task-list-label">{listName}</span>}
           </span>
         </div>

@@ -2,7 +2,9 @@ import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Flag, Plus
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { compareByDue, sortFocusDay } from '../data'
 import { dateKey, dayKeyOf, formatDayKey, formatDue, isForToday, isOverdue, todayDate, todayKey } from '../format'
+import { useTags } from './Tags'
 import { TimeSpentPicker } from './TimeSpentPicker'
+import { isBreakTask } from '../tags'
 import { daySeconds, formatSpent, hasTime, isRunning, trackDays } from '../time'
 import { useNow } from '../useNow'
 import type { FocusStatus, Task, TaskList, TimeTrack } from '../types'
@@ -114,6 +116,7 @@ export function CalendarPage({ tasks, lists, stopwatch, onOpenTask, onRenameTask
 
   const today = todayKey()
   const listById = useMemo(() => new Map(lists.map((list) => [list.id, list])), [lists])
+  const { tags } = useTags()
 
   // Time spent per day, across every task and the open stopwatch. Refreshed once a minute
   // while a stopwatch runs, so today's figure keeps up.
@@ -127,18 +130,20 @@ export function CalendarPage({ tasks, lists, stopwatch, onOpenTask, onRenameTask
     const collect = (track: TimeTrack) => { for (const day of trackDays(track, minuteNow)) days.add(day) }
     collect(stopwatch)
     for (const task of tasks) collect(task.time)
-    const map = new Map<string, { total: number; open: number; entries: { task: Task; seconds: number }[] }>()
+    // `total` is working time; time on break-tagged tasks is listed but kept out of it.
+    const map = new Map<string, { total: number; breaks: number; open: number; entries: { task: Task; seconds: number; isBreak: boolean }[] }>()
     for (const day of days) {
       const entries = tasks
-        .map((task) => ({ task, seconds: daySeconds(task.time, day, minuteNow) }))
+        .map((task) => ({ task, seconds: daySeconds(task.time, day, minuteNow), isBreak: isBreakTask(task, tags) }))
         .filter((entry) => entry.seconds >= 1)
-        .sort((a, b) => b.seconds - a.seconds)
+        .sort((a, b) => Number(a.isBreak) - Number(b.isBreak) || b.seconds - a.seconds)
       const open = daySeconds(stopwatch, day, minuteNow)
-      const total = entries.reduce((sum, entry) => sum + entry.seconds, 0) + open
-      if (total >= 1) map.set(day, { total, open, entries })
+      const total = entries.reduce((sum, entry) => entry.isBreak ? sum : sum + entry.seconds, 0) + open
+      const breaks = entries.reduce((sum, entry) => entry.isBreak ? sum + entry.seconds : sum, 0)
+      if (total + breaks >= 1) map.set(day, { total, breaks, open, entries })
     }
     return map
-  }, [tasks, stopwatch, minuteNow])
+  }, [tasks, stopwatch, tags, minuteNow])
 
   const days = useMemo(() => {
     if (view === 'day') return [new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate())]
@@ -502,18 +507,22 @@ export function CalendarPage({ tasks, lists, stopwatch, onOpenTask, onRenameTask
         </div>
         {options.dayView && time && (
           <div className="cal-day-time-list" aria-label="Time spent on this day">
-            <div className="cal-day-time-head"><span><Timer size={12} />Time spent</span><span>{formatSpent(time.total)}</span></div>
-            {time.entries.map(({ task, seconds }) => {
+            <div className="cal-day-time-head">
+              <span><Timer size={12} />Time spent</span>
+              <span title={time.breaks >= 60 ? `Not counting ${formatSpent(time.breaks)} on break-tagged tasks` : undefined}>{formatSpent(time.total)}</span>
+            </div>
+            {time.entries.map(({ task, seconds, isBreak }) => {
               const list = task.listId ? listById.get(task.listId) : undefined
               return (
                 <button
                   key={task.id}
-                  className={`cal-day-time-row ${isRunning(task.time) && key === today ? 'is-running' : ''} ${task.completed ? 'is-done' : ''}`}
+                  className={`cal-day-time-row ${isRunning(task.time) && key === today ? 'is-running' : ''} ${task.completed ? 'is-done' : ''} ${isBreak ? 'is-break' : ''}`}
                   onClick={() => onOpenTask(task.id)}
                   title={`Open ${task.title}`}
                 >
                   <span className="cal-chip-dot" style={{ '--chip-color': list?.color ?? 'var(--accent)' } as React.CSSProperties} />
                   <span className="cal-day-time-title">{task.title}</span>
+                  {isBreak && <span className="cal-day-time-break">Break</span>}
                   <span className="cal-day-time-value">{formatSpent(seconds)}</span>
                 </button>
               )

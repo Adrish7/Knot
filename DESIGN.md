@@ -60,7 +60,9 @@ Radii: 5px controls and checkboxes, 7px rows, 10px popovers and menus, 12px pane
 - **Inspector**: right-edge 420px panel with hairline and shadow, title textarea, plain notes area, label/value rows, subtasks.
 - **Dialogs**: 420px, 12px radius, title 17px, primary blue and secondary grey buttons.
 - **Toast**: dark pill at bottom center.
+- **Tags**: labels that cut across lists (Productive, Break, Relaxing to start), drawn as a 6px dot in the tag's colour plus its name in the meta line. Picked from a popover that filters, creates, renames and recolours. Exactly one tag is the break tag: its time counts as a break, the same as the gaps between sessions, so it stays out of every working-time total and joins the gaps on the sessions band as a thin line.
+- **Stopwatch face**: the one place with real depth. A machined puck under one fixed light (up and to the left): sixty second keys and sixty minute keys rise out of engraved slots in the face colour, finished hours are bearings in a groove along the bottom, the readout sits flat and crisp in a matte well. Paused keys sink and desaturate.
 
 ## Motion
 
-Two authored moments: completing a task (check pop, strike, row collapse) and the stopwatch face (hour ring sweep, seconds comet, breathing while running, hour rollover). Everything else is 150–220ms state feedback with `cubic-bezier(.2,.8,.2,1)`. Reduced motion collapses all to 1ms.
+Two authored moments: completing a task (check pop, strike, row collapse) and the stopwatch face (a key springs up each second; at the minute the keys drop in a clockwise wave that knocks up the next minute key; at the hour a bearing rolls into its detent; digits turn on drums; starting sends a hop round the lit keys; the puck tilts toward the pointer and settles). Everything else is 150–220ms state feedback with `cubic-bezier(.2,.8,.2,1)`. Reduced motion collapses all to 1ms.

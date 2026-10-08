@@ -1,6 +1,6 @@
 import { dateKey, dayKeyOf, todayDate, todayKey } from './format'
 import { emptyTrack, isRunning, pauseTrack, runningSince } from './time'
-import type { DeletedTask, FocusStatus, KnotData, Preferences, Recurrence, SortMode, Subtask, Task, TaskList, ThemeMode, TimeSession, TimeTrack } from './types'
+import type { DeletedTask, FocusStatus, KnotData, Preferences, Recurrence, SortMode, Subtask, Tag, Task, TaskList, ThemeMode, TimeSession, TimeTrack } from './types'
 
 export const TRASH_RETENTION_DAYS = 30
 
@@ -24,6 +24,19 @@ export function createDefaultPreferences(): Preferences {
     sidebarCollapsed: false,
     launchAtLogin: false,
   }
+}
+
+// Every workspace starts with these; the break tag can be renamed and recoloured but not deleted.
+export function createDefaultTags(): Tag[] {
+  return [
+    { id: uid('tag'), name: 'Productive', color: palette[3], isBreak: false, sortOrder: 0 },
+    createBreakTag(1),
+    { id: uid('tag'), name: 'Relaxing', color: palette[5], isBreak: false, sortOrder: 2 },
+  ]
+}
+
+function createBreakTag(sortOrder: number): Tag {
+  return { id: uid('tag'), name: 'Break', color: palette[2], isBreak: true, sortOrder }
 }
 
 export function uid(prefix: string) {
@@ -88,6 +101,7 @@ export function createTask(listId: string | null, title: string, sortOrder: numb
     createdAt: new Date().toISOString(),
     sortOrder,
     subtasks: [],
+    tagIds: [],
     time: emptyTrack(),
   }
 }
@@ -127,6 +141,7 @@ export function createSeedData(): KnotData {
       make(somedayId, 'Plan a screen-free Sunday', 0, { notes: 'Walk, a good lunch, and the book on the nightstand.' }),
       make(somedayId, 'Learn to make fresh pasta', 1),
     ],
+    tags: createDefaultTags(),
     trash: [],
     stopwatch: emptyTrack(),
     preferences: createDefaultPreferences(),
@@ -150,6 +165,9 @@ export function normalizeData(value: unknown): KnotData | null {
     }]
   })
 
+  const tags = normalizeTags(value.tags)
+  const tagIds = new Set(tags.map((tag) => tag.id))
+
   const taskIds = new Set<string>()
   const rawTasks = Array.isArray(value.tasks) ? value.tasks : []
   let recoveredListId: string | null = null
@@ -169,7 +187,7 @@ export function normalizeData(value: unknown): KnotData | null {
       : typeof candidate.listId === 'string' && listIds.has(candidate.listId)
         ? candidate.listId
         : recoveryList()
-    const task = normalizeTask(candidate, listId, index, now)
+    const task = normalizeTask(candidate, listId, index, now, tagIds)
     if (task.listId === null && task.focusDates.length === 0) return []
     taskIds.add(candidate.id)
     return [task]
@@ -187,7 +205,7 @@ export function normalizeData(value: unknown): KnotData | null {
     trashIds.add(candidate.id)
     const listId = candidate.listId === null ? null : typeof candidate.listId === 'string' ? candidate.listId : ''
     return [{
-      task: normalizeTask(candidate, listId, index, now),
+      task: normalizeTask(candidate, listId, index, now, tagIds),
       listName: cleanText(entry.listName) || 'Untitled list',
       deletedAt,
     }]
@@ -212,6 +230,7 @@ export function normalizeData(value: unknown): KnotData | null {
   return {
     version: 1,
     lists,
+    tags,
     tasks: settledTasks,
     trash: settledTrash,
     stopwatch,
@@ -224,7 +243,30 @@ export function normalizeData(value: unknown): KnotData | null {
   }
 }
 
-function normalizeTask(candidate: Record<string, unknown>, listId: string | null, index: number, now: string): Task {
+// Data saved before tags existed gets the default tags. After that the user's tags are kept as
+// they are, except that there is always exactly one break tag.
+function normalizeTags(value: unknown): Tag[] {
+  if (!Array.isArray(value)) return createDefaultTags()
+  const ids = new Set<string>()
+  let hasBreak = false
+  const tags = value.flatMap((candidate, index): Tag[] => {
+    if (!isRecord(candidate) || typeof candidate.id !== 'string' || !candidate.id.trim() || ids.has(candidate.id)) return []
+    ids.add(candidate.id)
+    const isBreak = candidate.isBreak === true && !hasBreak
+    if (isBreak) hasBreak = true
+    return [{
+      id: candidate.id,
+      name: cleanText(candidate.name) || 'Untitled tag',
+      color: cleanText(candidate.color) || palette[index % palette.length],
+      isBreak,
+      sortOrder: finiteNumber(candidate.sortOrder, index),
+    }]
+  })
+  if (!hasBreak) tags.push(createBreakTag(tags.length))
+  return tags
+}
+
+function normalizeTask(candidate: Record<string, unknown>, listId: string | null, index: number, now: string, tagIds: Set<string>): Task {
   const completed = Boolean(candidate.completed)
   const focusDates = normalizeFocusDates(candidate.focusDates)
   return {
@@ -245,6 +287,7 @@ function normalizeTask(candidate: Record<string, unknown>, listId: string | null
     createdAt: validIso(candidate.createdAt) || now,
     sortOrder: finiteNumber(candidate.sortOrder, index),
     subtasks: normalizeSubtasks(candidate.subtasks),
+    tagIds: Array.isArray(candidate.tagIds) ? [...new Set(candidate.tagIds.filter((id): id is string => typeof id === 'string' && tagIds.has(id)))] : [],
     time: normalizeTrack(candidate.time, candidate.timeSpentMinutes, legacyTimeDay(focusDates, candidate, now)),
   }
 }

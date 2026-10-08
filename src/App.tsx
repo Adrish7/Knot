@@ -9,12 +9,14 @@ import { Sidebar } from './components/Sidebar'
 import { StopwatchPage } from './components/StopwatchPage'
 import { TaskPanel } from './components/TaskPanel'
 import { ListRing, listProgress } from './components/ListRing'
+import { TagsContext, type TagsApi } from './components/Tags'
 import { Trash } from './components/Trash'
 import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sortFocusDay, sortStarred, uid } from './data'
 import { dateKey, dayKeyOf, isForToday, parseDateKey, todayDate, todayKey } from './format'
 import { useNow } from './useNow'
-import { daySeconds, emptyTrack, formatSpent, isRunning, mergeTracks, pauseTrack, setTotalSeconds, startTrack, totalSeconds } from './time'
-import type { DeletedTask, FocusStatus, KnotData, Task, TaskList, ThemeMode, TimeTrack, ViewId } from './types'
+import { dayBalance, sortTags } from './tags'
+import { emptyTrack, formatSpent, isRunning, mergeTracks, pauseTrack, setTotalSeconds, startTrack, totalSeconds } from './time'
+import type { DeletedTask, FocusStatus, KnotData, Tag, Task, TaskList, ThemeMode, TimeTrack, ViewId } from './types'
 
 const STORAGE_KEY = 'knot.desktop.data'
 const longDate = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
@@ -250,18 +252,20 @@ function App() {
   }, [confirmAction, createListOpen, data.lists, listMenu, quickAddListId, renameList, selectedView])
 
   const sortedLists = useMemo(() => [...data.lists].sort((a, b) => a.sortOrder - b.sortOrder), [data.lists])
+  const sortedTags = useMemo(() => sortTags(data.tags), [data.tags])
   const selectedTask = data.tasks.find((task) => task.id === selectedTaskId) ?? null
 
   const displayedTasks = useMemo(() => {
     const needle = query.trim().toLowerCase()
     let tasks = data.tasks.filter((task) => task.listId !== null)
-    if (needle) return tasks.filter((task) => `${task.title} ${task.notes} ${task.subtasks.map((item) => item.title).join(' ')}`.toLowerCase().includes(needle))
+    const tagNames = (task: Task) => data.tags.filter((tag) => task.tagIds.includes(tag.id)).map((tag) => tag.name).join(' ')
+    if (needle) return tasks.filter((task) => `${task.title} ${task.notes} ${task.subtasks.map((item) => item.title).join(' ')} ${tagNames(task)}`.toLowerCase().includes(needle))
     tasks = tasks.filter((task) => !task.completed)
     if (selectedView === 'today') tasks = sortFocusDay(tasks.filter(isForToday), todayKey())
     else if (selectedView === 'starred') tasks = sortStarred(tasks.filter((task) => task.starred))
     else if (selectedView.startsWith('list:')) tasks = tasks.filter((task) => task.listId === selectedView.slice(5))
     return tasks
-  }, [clockTick, data.tasks, query, selectedView])
+  }, [clockTick, data.tasks, data.tags, query, selectedView])
 
   const completedTasks = useMemo(() => data.tasks.filter((task) => task.listId !== null && task.completed), [data.tasks])
   const doneCounts = useMemo(() => completedTasks.reduce<Record<string, number>>((counts, task) => { if (task.listId) counts[task.listId] = (counts[task.listId] ?? 0) + 1; return counts }, {}), [completedTasks])
@@ -278,10 +282,11 @@ function App() {
     if (selectedView === 'calendar') return { title: 'Calendar', icon: <CalendarDays />, color: 'var(--c-calendar)', subline: openTasksLabel(data.tasks.filter((task) => !task.completed).length), mode: 'smart' }
     if (selectedView === 'starred') return { title: 'Starred', icon: <Star fill="currentColor" />, color: 'var(--c-starred)', mode: 'smart' }
     if (selectedView === 'stopwatch') {
-      const today = todayKey()
-      const timed = data.tasks.filter((task) => daySeconds(task.time, today, headerNow) > 0 || isRunning(task.time))
-      const total = timed.reduce((sum, task) => sum + daySeconds(task.time, today, headerNow), 0) + daySeconds(data.stopwatch, today, headerNow)
-      const subline = total < 60 && timed.length === 0 && !isRunning(data.stopwatch) ? 'Nothing timed yet today' : `Today ${formatSpent(total)}${timed.length > 0 ? ` across ${timed.length} ${timed.length === 1 ? 'task' : 'tasks'}` : ''}`
+      // Working time only; breaks (between sessions, and on break-tagged tasks) are given apart.
+      const day = dayBalance(data.tasks, data.stopwatch, data.tags, todayKey(), headerNow)
+      const subline = day.work < 60 && day.tasks === 0 && day.breaks < 60 && !anyRunning
+        ? 'Nothing timed yet today'
+        : `Today ${formatSpent(day.work)}${day.tasks > 0 ? ` across ${day.tasks} ${day.tasks === 1 ? 'task' : 'tasks'}` : ''}${day.breaks >= 60 ? ` · ${formatSpent(day.breaks)} on breaks` : ''}`
       return { title: 'Stopwatch', icon: <Timer />, color: 'var(--c-timer)', subline, mode: 'smart' }
     }
     const open = activeList ? data.tasks.filter((task) => task.listId === activeList.id && !task.completed).length : 0
@@ -347,6 +352,48 @@ function App() {
     if (task) updateTask(taskId, { starred: !task.starred })
   }
 
+  // ----- Tags. New ones take the first palette colour no tag has yet.
+  const createTag = (name: string): Tag => {
+    const used = new Set(data.tags.map((tag) => tag.color))
+    const tag: Tag = {
+      id: uid('tag'),
+      name: name.trim() || 'Untitled tag',
+      color: palette.find((color) => !used.has(color)) ?? palette[data.tags.length % palette.length],
+      isBreak: false,
+      sortOrder: data.tags.reduce((order, item) => Math.max(order, item.sortOrder + 1), 0),
+    }
+    setData((current) => ({ ...current, tags: [...current.tags, tag] }))
+    return tag
+  }
+  const updateTag = (tagId: string, patch: Partial<Pick<Tag, 'name' | 'color'>>) => setData((current) => ({
+    ...current,
+    tags: current.tags.map((tag) => tag.id === tagId ? { ...tag, ...patch } : tag),
+  }))
+  // The break tag stays: without it nothing could be marked as break time.
+  const removeTag = (tagId: string) => {
+    const tag = data.tags.find((item) => item.id === tagId)
+    if (!tag || tag.isBreak) return
+    const strip = (task: Task) => task.tagIds.includes(tagId) ? { ...task, tagIds: task.tagIds.filter((id) => id !== tagId) } : task
+    const run = () => {
+      setData((current) => ({
+        ...current,
+        tags: current.tags.filter((item) => item.id !== tagId),
+        tasks: current.tasks.map(strip),
+        trash: current.trash.map((entry) => ({ ...entry, task: strip(entry.task) })),
+      }))
+      showToast(`${tag.name} deleted`)
+    }
+    const used = data.tasks.filter((task) => task.tagIds.includes(tagId)).length
+    if (used === 0) return run()
+    setConfirmAction({
+      title: 'Delete tag',
+      message: `“${tag.name}” will be removed from ${used} ${used === 1 ? 'task' : 'tasks'}. The tasks stay.`,
+      confirmLabel: 'Delete',
+      run,
+    })
+  }
+  const tagsApi: TagsApi = { tags: sortedTags, create: createTag, update: updateTag, remove: removeTag }
+
   // ----- Stopwatches. A target is a task id, or null for the open stopwatch. Only one runs at a time.
   const trackOf = (current: KnotData, target: string | null) => target === null ? current.stopwatch : current.tasks.find((task) => task.id === target)?.time ?? null
   const withTrack = (current: KnotData, target: string | null, change: (track: TimeTrack) => TimeTrack): KnotData => {
@@ -400,6 +447,16 @@ function App() {
     setSelectedTaskId(null)
     setQuickAddListId(null)
   }
+  // A task made on the Stopwatch page is planned for today in the calendar and becomes what the
+  // stopwatch shows, ready to start.
+  const addStopwatchTask = (title: string, openDetails: boolean) => {
+    const task = { ...createTask(null, title, 0), focusDates: [todayKey()] }
+    setData((current) => ({ ...current, tasks: [...current.tasks, task] }))
+    setStopwatchTarget(task.id)
+    if (openDetails) setSelectedTaskId(task.id)
+    showToast('Task added for today')
+  }
+
   // Moves everything on the open stopwatch onto a task, then clears the open stopwatch.
   const moveOpenToTask = (taskId: string) => {
     const now = Date.now()
@@ -420,7 +477,7 @@ function App() {
     items.reduce((next, item) => placeFocus(next, item.taskId, day, item.fromDay, beforeTaskId), current)
   ))
 
-  // Copies tasks onto `day` as new, separate tasks: same title, list and subtasks (unchecked),
+  // Copies tasks onto `day` as new, separate tasks: same title, list, tags and subtasks (unchecked),
   // nothing else, so time, notes and day outcomes stay with the originals.
   const copyTasksToDay = (taskIds: string[], day: string, beforeTaskId: string | null) => {
     const ids = [...new Set(taskIds)]
@@ -429,6 +486,7 @@ function App() {
       if (!source) return next
       const copy: Task = {
         ...createTask(source.listId, source.title, endSortOrder(next.tasks, source.listId)),
+        tagIds: [...source.tagIds],
         subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })),
       }
       return placeFocus({ ...next, tasks: [...next.tasks, copy] }, copy.id, day, null, beforeTaskId)
@@ -736,127 +794,131 @@ function App() {
   if (!hydrated) return <div className="splash"><img src="./icon.png" alt="" /><span>Loading Knot</span></div>
 
   return (
-    <div
-      className={`app-shell ${data.preferences.sidebarCollapsed ? 'sidebar-collapsed' : ''} ${activeList ? 'is-accented' : ''}`}
-      style={activeList ? { '--list-accent': activeList.color } as React.CSSProperties : undefined}
-      onMouseDown={() => listMenu && setListMenu(null)}
-    >
-      <Sidebar
-        collapsed={data.preferences.sidebarCollapsed}
-        lists={sortedLists}
-        tasks={data.tasks}
-        stopwatch={data.stopwatch}
-        selectedView={selectedView}
-        completedCount={completedTasks.length}
-        trashCount={data.trash.length}
-        launchAtLogin={data.preferences.launchAtLogin}
-        theme={data.preferences.theme}
-        query={query}
-        searchRef={searchRef}
-        onQuery={(value) => { setQuery(value); if (value.trim() && (selectedView === 'trash' || selectedView === 'completed')) setSelectedView('all') }}
-        onSelect={(view) => { setSelectedView(view); setQuery(''); setQuickAddListId(null) }}
-        onCreateList={() => setCreateListOpen(true)}
-        onListMenu={openListMenu}
-        onRenameList={renameListById}
-        onToggle={() => updatePreferences({ sidebarCollapsed: !data.preferences.sidebarCollapsed })}
-        onLaunchAtLogin={(launchAtLogin) => { updatePreferences({ launchAtLogin }); showToast(launchAtLogin ? 'Knot will open when you log in' : 'Open at login turned off') }}
-        onTheme={setTheme}
-        onExport={window.knot ? exportData : undefined}
-        onImport={window.knot ? importData : undefined}
-      />
-      <section className="workspace">
-        <Header
-          title={page.title}
-          subline={page.subline}
-          icon={page.icon}
-          color={page.color}
-          sortMode={data.preferences.sortMode}
-          showSort={page.mode !== 'smart' || selectedView === 'today' || selectedView === 'starred'}
-          onSort={(sortMode) => updatePreferences({ sortMode })}
-          onRenameTitle={!searching && activeList ? (name) => renameListById(activeList.id, name) : undefined}
+    <TagsContext.Provider value={tagsApi}>
+      <div
+        className={`app-shell ${data.preferences.sidebarCollapsed ? 'sidebar-collapsed' : ''} ${activeList ? 'is-accented' : ''}`}
+        style={activeList ? { '--list-accent': activeList.color } as React.CSSProperties : undefined}
+        onMouseDown={() => listMenu && setListMenu(null)}
+      >
+        <Sidebar
+          collapsed={data.preferences.sidebarCollapsed}
+          lists={sortedLists}
+          tasks={data.tasks}
+          stopwatch={data.stopwatch}
+          selectedView={selectedView}
+          completedCount={completedTasks.length}
+          trashCount={data.trash.length}
+          launchAtLogin={data.preferences.launchAtLogin}
+          theme={data.preferences.theme}
+          query={query}
+          searchRef={searchRef}
+          onQuery={(value) => { setQuery(value); if (value.trim() && (selectedView === 'trash' || selectedView === 'completed')) setSelectedView('all') }}
+          onSelect={(view) => { setSelectedView(view); setQuery(''); setQuickAddListId(null) }}
+          onCreateList={() => setCreateListOpen(true)}
+          onListMenu={openListMenu}
+          onRenameList={renameListById}
+          onToggle={() => updatePreferences({ sidebarCollapsed: !data.preferences.sidebarCollapsed })}
+          onLaunchAtLogin={(launchAtLogin) => { updatePreferences({ launchAtLogin }); showToast(launchAtLogin ? 'Knot will open when you log in' : 'Open at login turned off') }}
+          onTheme={setTheme}
+          onExport={window.knot ? exportData : undefined}
+          onImport={window.knot ? importData : undefined}
         />
-        {selectedView === 'completed' ? <Completed tasks={completedTasks} lists={sortedLists} onOpen={setSelectedTaskId} onReopen={(taskId) => completeTask(taskId, false)} onDelete={deleteTask} onSetTimeSpent={adjustStopwatch} onStopwatch={openStopwatchFor} onClear={clearCompleted} />
-          : selectedView === 'trash' ? <Trash entries={data.trash} onRestore={restoreTask} onPurge={purgeTask} onEmpty={emptyTrash} />
-          : selectedView === 'stopwatch' && !searching ? <StopwatchPage
-            tasks={data.tasks}
-            lists={sortedLists}
-            open={data.stopwatch}
-            target={stopwatchTarget}
-            onTarget={setStopwatchTarget}
-            onStart={startStopwatch}
-            onPause={pauseStopwatch}
-            onReset={resetStopwatch}
-            onAdjust={adjustStopwatch}
-            onMoveOpenToTask={moveOpenToTask}
-            onOpenTask={setSelectedTaskId}
-          />
-          : selectedView === 'calendar' && !searching ? <CalendarPage
-            tasks={data.tasks}
-            lists={sortedLists}
-            stopwatch={data.stopwatch}
-            onOpenTask={setSelectedTaskId}
-            onRenameTask={(taskId, title) => updateTask(taskId, { title })}
-            onSetTimeSpent={adjustStopwatch}
-            onStopwatch={openStopwatchFor}
-            onPlaceTasks={placeTasks}
-            onCopyTasks={copyTasksToDay}
-            onRemoveFocusDate={removeFocusDate}
-            onSetFocusStatus={setFocusStatus}
-            onAddTaskOnDay={addTaskOnDay}
-            onAddTask={(title, listId, extras) => { const target = listId ?? sortedLists[0]?.id; if (target) addTask(target, title, false, extras); else setCreateListOpen(true) }}
-          /> : <Board
-            mode={page.mode}
-            lists={sortedLists}
-            tasks={displayedTasks}
-            activeListId={activeListId}
-            doneCounts={doneCounts}
-            emptyIcon={page.icon}
+        <section className="workspace">
+          <Header
+            title={page.title}
+            subline={page.subline}
+            icon={page.icon}
+            color={page.color}
             sortMode={data.preferences.sortMode}
-            quickAddListId={quickAddListId}
-            quickAddEnabled={page.mode === 'list' || (!searching && (selectedView === 'today' || selectedView === 'starred'))}
-            onQuickAddList={setQuickAddListId}
-            onAddTask={(listId, title, openDetails) => addTask(listId, title, openDetails,
-              selectedView === 'today' ? { focusDates: [todayKey()] }
-                : selectedView === 'starred' ? { starred: true }
-                : {})}
-            onOpenTask={setSelectedTaskId}
-            onCompleteTask={completeTask}
-            onToggleSubtask={toggleSubtask}
-            onStarTask={toggleStar}
-            onDeleteTask={deleteTask}
-            onSetDueTask={(taskId, dueAt) => updateTask(taskId, { dueAt })}
-            onSetTimeSpentTask={adjustStopwatch}
-            onStopwatchTask={openStopwatchFor}
-            onRenameTask={(taskId, title) => updateTask(taskId, { title })}
-            onRenameList={renameListById}
-            onListMenu={openListMenu}
-            onMoveTask={moveTask}
-            onReorderTask={searching ? undefined : selectedView === 'today' ? reorderToday : selectedView === 'starred' ? reorderStarred : undefined}
-            onMoveList={moveList}
-            onCreateList={() => setCreateListOpen(true)}
-          />}
-      </section>
+            showSort={page.mode !== 'smart' || selectedView === 'today' || selectedView === 'starred'}
+            onSort={(sortMode) => updatePreferences({ sortMode })}
+            onRenameTitle={!searching && activeList ? (name) => renameListById(activeList.id, name) : undefined}
+          />
+          {selectedView === 'completed' ? <Completed tasks={completedTasks} lists={sortedLists} onOpen={setSelectedTaskId} onReopen={(taskId) => completeTask(taskId, false)} onDelete={deleteTask} onSetTimeSpent={adjustStopwatch} onStopwatch={openStopwatchFor} onClear={clearCompleted} />
+            : selectedView === 'trash' ? <Trash entries={data.trash} onRestore={restoreTask} onPurge={purgeTask} onEmpty={emptyTrash} />
+            : selectedView === 'stopwatch' && !searching ? <StopwatchPage
+              tasks={data.tasks}
+              lists={sortedLists}
+              open={data.stopwatch}
+              target={stopwatchTarget}
+              onTarget={setStopwatchTarget}
+              onStart={startStopwatch}
+              onPause={pauseStopwatch}
+              onReset={resetStopwatch}
+              onAdjust={adjustStopwatch}
+              onMoveOpenToTask={moveOpenToTask}
+              onOpenTask={setSelectedTaskId}
+              onAddTask={addStopwatchTask}
+              onSetTags={(taskId, tagIds) => updateTask(taskId, { tagIds })}
+            />
+            : selectedView === 'calendar' && !searching ? <CalendarPage
+              tasks={data.tasks}
+              lists={sortedLists}
+              stopwatch={data.stopwatch}
+              onOpenTask={setSelectedTaskId}
+              onRenameTask={(taskId, title) => updateTask(taskId, { title })}
+              onSetTimeSpent={adjustStopwatch}
+              onStopwatch={openStopwatchFor}
+              onPlaceTasks={placeTasks}
+              onCopyTasks={copyTasksToDay}
+              onRemoveFocusDate={removeFocusDate}
+              onSetFocusStatus={setFocusStatus}
+              onAddTaskOnDay={addTaskOnDay}
+              onAddTask={(title, listId, extras) => { const target = listId ?? sortedLists[0]?.id; if (target) addTask(target, title, false, extras); else setCreateListOpen(true) }}
+            /> : <Board
+              mode={page.mode}
+              lists={sortedLists}
+              tasks={displayedTasks}
+              activeListId={activeListId}
+              doneCounts={doneCounts}
+              emptyIcon={page.icon}
+              sortMode={data.preferences.sortMode}
+              quickAddListId={quickAddListId}
+              quickAddEnabled={page.mode === 'list' || (!searching && (selectedView === 'today' || selectedView === 'starred'))}
+              onQuickAddList={setQuickAddListId}
+              onAddTask={(listId, title, openDetails) => addTask(listId, title, openDetails,
+                selectedView === 'today' ? { focusDates: [todayKey()] }
+                  : selectedView === 'starred' ? { starred: true }
+                  : {})}
+              onOpenTask={setSelectedTaskId}
+              onCompleteTask={completeTask}
+              onToggleSubtask={toggleSubtask}
+              onStarTask={toggleStar}
+              onDeleteTask={deleteTask}
+              onSetDueTask={(taskId, dueAt) => updateTask(taskId, { dueAt })}
+              onSetTimeSpentTask={adjustStopwatch}
+              onStopwatchTask={openStopwatchFor}
+              onRenameTask={(taskId, title) => updateTask(taskId, { title })}
+              onRenameList={renameListById}
+              onListMenu={openListMenu}
+              onMoveTask={moveTask}
+              onReorderTask={searching ? undefined : selectedView === 'today' ? reorderToday : selectedView === 'starred' ? reorderStarred : undefined}
+              onMoveList={moveList}
+              onCreateList={() => setCreateListOpen(true)}
+            />}
+        </section>
 
-      {selectedTask && <><button className="panel-scrim" onClick={() => setSelectedTaskId(null)} aria-label="Close details" /><TaskPanel task={selectedTask} lists={sortedLists} onStopwatch={() => openStopwatchFor(selectedTask.id)} onSetTimeSpent={(seconds) => adjustStopwatch(selectedTask.id, seconds)} onUpdate={(patch) => {
-        if (patch.listId && patch.listId !== selectedTask.listId) moveTask(selectedTask.id, patch.listId)
-        else updateTask(selectedTask.id, patch)
-      }} onComplete={(completed) => completeTask(selectedTask.id, completed)} onDelete={() => deleteTask(selectedTask.id)} onClose={() => setSelectedTaskId(null)} /></>}
+        {selectedTask && <><button className="panel-scrim" onClick={() => setSelectedTaskId(null)} aria-label="Close details" /><TaskPanel task={selectedTask} lists={sortedLists} onStopwatch={() => openStopwatchFor(selectedTask.id)} onSetTimeSpent={(seconds) => adjustStopwatch(selectedTask.id, seconds)} onUpdate={(patch) => {
+          if (patch.listId && patch.listId !== selectedTask.listId) moveTask(selectedTask.id, patch.listId)
+          else updateTask(selectedTask.id, patch)
+        }} onComplete={(completed) => completeTask(selectedTask.id, completed)} onDelete={() => deleteTask(selectedTask.id)} onClose={() => setSelectedTaskId(null)} /></>}
 
-      {createListOpen && <CreateListModal onClose={() => setCreateListOpen(false)} onCreate={addList} />}
-      {confirmAction && <ConfirmModal title={confirmAction.title} message={confirmAction.message} confirmLabel={confirmAction.confirmLabel} onCancel={() => setConfirmAction(null)} onConfirm={() => { confirmAction.run(); setConfirmAction(null) }} />}
-      {renameList && <RenameListModal initialName={renameList.name} onClose={() => setRenameList(null)} onRename={(name) => { renameListById(renameList.id, name); setRenameList(null); showToast('List renamed') }} />}
+        {createListOpen && <CreateListModal onClose={() => setCreateListOpen(false)} onCreate={addList} />}
+        {confirmAction && <ConfirmModal title={confirmAction.title} message={confirmAction.message} confirmLabel={confirmAction.confirmLabel} onCancel={() => setConfirmAction(null)} onConfirm={() => { confirmAction.run(); setConfirmAction(null) }} />}
+        {renameList && <RenameListModal initialName={renameList.name} onClose={() => setRenameList(null)} onRename={(name) => { renameListById(renameList.id, name); setRenameList(null); showToast('List renamed') }} />}
 
-      {listMenu && (
-        <div className="context-menu" role="menu" aria-label={`Options for ${listMenu.list.name}`} style={{ left: listMenu.x, top: listMenu.y }} onMouseDown={(event) => event.stopPropagation()}>
-          <button role="menuitem" autoFocus onClick={() => { setRenameList(listMenu.list); setListMenu(null) }}><Pencil size={14} />Rename</button>
-          <button role="menuitem" onClick={() => { openList(listMenu.list.id); setListMenu(null) }}><FolderOpen size={14} />Open list</button>
-          <span />
-          <button role="menuitem" className="danger" onClick={() => deleteList(listMenu.list)}><Trash2 size={14} />Delete list</button>
-        </div>
-      )}
+        {listMenu && (
+          <div className="context-menu" role="menu" aria-label={`Options for ${listMenu.list.name}`} style={{ left: listMenu.x, top: listMenu.y }} onMouseDown={(event) => event.stopPropagation()}>
+            <button role="menuitem" autoFocus onClick={() => { setRenameList(listMenu.list); setListMenu(null) }}><Pencil size={14} />Rename</button>
+            <button role="menuitem" onClick={() => { openList(listMenu.list.id); setListMenu(null) }}><FolderOpen size={14} />Open list</button>
+            <span />
+            <button role="menuitem" className="danger" onClick={() => deleteList(listMenu.list)}><Trash2 size={14} />Delete list</button>
+          </div>
+        )}
 
-      {toast && <div className="toast"><CheckCircle2 size={16} />{toast}</div>}
-    </div>
+        {toast && <div className="toast"><CheckCircle2 size={16} />{toast}</div>}
+      </div>
+    </TagsContext.Provider>
   )
 }
 

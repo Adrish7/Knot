@@ -12,6 +12,16 @@ export interface TaskList {
   sortOrder: number
 }
 
+// A label a task can carry alongside its list, e.g. Productive or Relaxing. Exactly one tag is the
+// break tag: time on tasks wearing it counts as a break, the same as the gaps between sessions.
+export interface Tag {
+  id: string
+  name: string
+  color: string
+  isBreak: boolean
+  sortOrder: number
+}
+
 export interface Subtask {
   id: string
   title: string
@@ -46,6 +56,7 @@ export interface Task {
   createdAt: string
   sortOrder: number
   subtasks: Subtask[]
+  tagIds: string[]
   time: TimeTrack // time spent on the task, whatever its state
 }
 
@@ -65,6 +76,7 @@ export interface Preferences {
 export interface KnotData {
   version: 1
   lists: TaskList[]
+  tags: Tag[]
   tasks: Task[]
   trash: DeletedTask[]
   stopwatch: TimeTrack // the open stopwatch, not tied to any task

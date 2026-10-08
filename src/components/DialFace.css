@@ -1,41 +1,265 @@
-/* Dial face. Second ticks on the rim, minute ticks inside them, finished hours as dots along the
-   bottom. Lit marks take --face-color (the task's list colour or --c-timer); paused marks hold but
-   desaturate. */
+/* The Dial, machined. A shallow puck lit from above: keys rise out of slots in the rim, a well
+   holds the readout, bearings sit in a groove along the bottom. Sizes are in face units
+   (--u = 1/400 of the face). Lit parts take --face-color; paused parts sink a little and
+   desaturate. Everything that moves animates transform or opacity, except the one-off colour
+   fade below. */
+
+/* The lit colour is a registered colour so pausing (and changing task) fades every gradient
+   that uses it instead of snapping. */
+@property --dial-on {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
 .sw-dial {
+  transition: --dial-on 320ms var(--ease);
   --sw-face-size: clamp(300px, 64cqi, 460px);
-  --sw-tick: color-mix(in srgb, var(--text) 15%, transparent);
-  --sw-tick-major: color-mix(in srgb, var(--text) 30%, transparent);
-  --sw-on: var(--face-color);
+  --u: 0.25cqi;
+  --dial-on: var(--face-color);
+  --lift: calc(2 * var(--u));
+  --side: calc(0.75 * var(--u));
+
+  /* light materials */
+  --dial-plate: #f8f8fa;
+  --dial-plate-2: #f1f1f4;
+  --dial-chamfer-hi: #ededf0;
+  --dial-chamfer-lo: #d2d2d7;
+  --dial-glint: rgba(255, 255, 255, 1);
+  --dial-ray: rgba(255, 255, 255, 0.9);
+  --dial-well: #f6f6f8;
+  --dial-well-shade: rgba(0, 0, 0, 0.09);
+  --dial-well-lip: rgba(255, 255, 255, 1);
+  --dial-slot-hi: color-mix(in srgb, var(--text) 26%, transparent);
+  --dial-slot-lo: color-mix(in srgb, var(--text) 13%, transparent);
+  --dial-slot-major-hi: color-mix(in srgb, var(--text) 42%, transparent);
+  --dial-slot-major-lo: color-mix(in srgb, var(--text) 26%, transparent);
+  --dial-cast: rgba(20, 20, 30, 0.3);
+  --dial-cast-on: 0.7;
+  --dial-ball-body: 58%;
+  --dial-steel-hi: #c9c9ce;
+  --dial-steel: #8e8e94;
+  --dial-steel-lo: #6c6c72;
+  --dial-groove: rgba(0, 0, 0, 0.13);
+  --dial-groove-lip: rgba(255, 255, 255, 1);
+  --dial-sheen: rgba(255, 255, 255, 0);
+  --dial-drop: 0 1px 2px rgba(0, 0, 0, 0.07), 0 6px 16px -4px rgba(0, 0, 0, 0.1), 0 22px 44px -18px rgba(0, 0, 0, 0.16);
+
   position: relative;
   width: min(100%, var(--sw-face-size));
   aspect-ratio: 1;
   container-type: inline-size;
 }
-:root[data-theme='dark'] .sw-dial { --sw-tick: color-mix(in srgb, var(--text) 13%, transparent); --sw-tick-major: color-mix(in srgb, var(--text) 27%, transparent); }
+:root[data-theme='dark'] .sw-dial {
+  --dial-plate: #2c2c30;
+  --dial-plate-2: #27272a;
+  --dial-chamfer-hi: rgba(255, 255, 255, 0.075);
+  --dial-chamfer-lo: rgba(255, 255, 255, 0.02);
+  --dial-glint: rgba(255, 255, 255, 0.42);
+  --dial-ray: rgba(255, 255, 255, 0.045);
+  --dial-well: #252528;
+  --dial-well-shade: rgba(0, 0, 0, 0.5);
+  --dial-well-lip: rgba(255, 255, 255, 0.07);
+  --dial-slot-hi: rgba(0, 0, 0, 0.62);
+  --dial-slot-lo: rgba(0, 0, 0, 0.36);
+  --dial-slot-major-hi: rgba(0, 0, 0, 0.8);
+  --dial-slot-major-lo: rgba(0, 0, 0, 0.55);
+  --dial-cast: rgba(0, 0, 0, 0.8);
+  --dial-cast-on: 0.85;
+  --dial-ball-body: 36%;
+  --dial-steel-hi: #d4d4d9;
+  --dial-steel: #9a9aa1;
+  --dial-steel-lo: #6e6e75;
+  --dial-groove: rgba(0, 0, 0, 0.45);
+  --dial-groove-lip: rgba(255, 255, 255, 0.07);
+  --dial-sheen: rgba(255, 255, 255, 0.05);
+  --dial-drop: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 20px -6px rgba(0, 0, 0, 0.45), 0 26px 50px -20px rgba(0, 0, 0, 0.55);
+}
 @container sw (min-width: 940px) {
   .sw-layout .sw-dial { --sw-face-size: clamp(300px, 40cqi, 460px); }
 }
-.sw-dial.is-paused { --sw-on: color-mix(in oklab, var(--face-color) 32%, var(--text-3)); }
+.sw-dial.is-paused {
+  --dial-on: color-mix(in oklab, var(--face-color) 32%, var(--text-3));
+  --lift: calc(0.8 * var(--u));
+  --side: calc(0.35 * var(--u));
+}
 
-.sw-dial-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; shape-rendering: geometricPrecision; }
-.sw-dial-hairline { fill: none; stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.sw-dial-tick { stroke: var(--sw-tick); stroke-linecap: butt; transition: stroke 300ms var(--ease); }
-.sw-dial-tick.is-s { stroke-width: 1.35; }
-.sw-dial-tick.is-m { stroke-width: 1.9; }
-.sw-dial-tick.is-major { stroke: var(--sw-tick-major); }
-.sw-dial-tick.is-origin { stroke: var(--text-2); }
-.sw-dial-tick.is-on { stroke: var(--sw-on); }
-.sw-dial-hour { r: 1.35px; fill: var(--sw-tick-major); transition: r 220ms var(--ease), fill 300ms var(--ease); }
-.sw-dial-hour.is-on { r: 3px; fill: var(--sw-on); }
+/* --- the body ------------------------------------------------------------------------- */
+.sw-dial-drop, .sw-dial-puck, .sw-dial-body, .sw-dial-light { position: absolute; inset: 0; border-radius: 50%; }
+.sw-dial-drop { box-shadow: var(--dial-drop); }
+.sw-dial-puck { transform-origin: 50% 50%; }
+.sw-dial.is-tilting :is(.sw-dial-puck, .sw-dial-drop, .sw-dial-sheen, .sw-dial-glint, .sw-dial-grain, .sw-dial-casts, .sw-dial-bearings) { will-change: transform; }
+.sw-dial-body {
+  border: calc(1.6 * var(--u)) solid transparent;
+  background:
+    linear-gradient(var(--dial-plate), var(--dial-plate-2)) padding-box,
+    linear-gradient(var(--dial-chamfer-hi), var(--dial-chamfer-lo)) border-box;
+}
+.sw-dial-well {
+  position: absolute;
+  inset: 12.5%; /* r = 150 */
+  border-radius: 50%;
+  background: var(--dial-well);
+  box-shadow: inset 0 calc(1.1 * var(--u)) calc(2.6 * var(--u)) var(--dial-well-shade), inset 0 calc(-0.5 * var(--u)) 0 var(--dial-well-lip);
+}
+/* The rim is turned on a lathe: concentric grain throws a soft bow-tie of light pointing at the
+   lamp. The well, laid over it, is matte. */
+.sw-dial-grain {
+  position: absolute;
+  inset: calc(1.6 * var(--u));
+  border-radius: 50%;
+  rotate: -25deg; /* REST_GLINT */
+  background: conic-gradient(
+    var(--dial-ray) 0deg,
+    color-mix(in srgb, var(--dial-ray) 35%, transparent) 16deg,
+    transparent 46deg,
+    transparent 134deg,
+    color-mix(in srgb, var(--dial-ray) 35%, transparent) 164deg,
+    var(--dial-ray) 180deg,
+    color-mix(in srgb, var(--dial-ray) 35%, transparent) 196deg,
+    transparent 226deg,
+    transparent 314deg,
+    color-mix(in srgb, var(--dial-ray) 35%, transparent) 344deg,
+    var(--dial-ray) 360deg);
+}
+/* A diamond-cut chamfer: one bright glint where the edge faces the light, a faint return
+   opposite. The script turns it as the puck tilts, so the glint slides around the rim. */
+.sw-dial-glint {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  rotate: -25deg; /* REST_GLINT */
+  background: conic-gradient(
+    var(--dial-glint) 0deg,
+    color-mix(in srgb, var(--dial-glint) 30%, transparent) 26deg,
+    transparent 70deg,
+    transparent 150deg,
+    color-mix(in srgb, var(--dial-glint) 22%, transparent) 180deg,
+    transparent 210deg,
+    transparent 290deg,
+    color-mix(in srgb, var(--dial-glint) 30%, transparent) 334deg,
+    var(--dial-glint) 360deg);
+  -webkit-mask-image: radial-gradient(closest-side, transparent calc(100% - 1.6 * var(--u) - 0.5px), #000 calc(100% - 1.6 * var(--u)), #000 calc(100% - 0.5px), transparent 100%);
+  mask-image: radial-gradient(closest-side, transparent calc(100% - 1.6 * var(--u) - 0.5px), #000 calc(100% - 1.6 * var(--u)), #000 calc(100% - 0.5px), transparent 100%);
+}
+.sw-dial-light { overflow: hidden; }
+.sw-dial-sheen {
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(closest-side at 38% 30%, var(--dial-sheen), transparent);
+}
 
+/* --- keys ------------------------------------------------------------------------------ */
+.sw-dial-keys, .sw-dial-casts { position: absolute; inset: 0; }
+.sw-dial-key, .sw-dial-cast { position: absolute; border-radius: calc(0.8 * var(--u)); }
+/* Gradients run screen-down whatever the key's angle (--ga), with stops in face units so every
+   key gets the same bevel: a slot is shadowed under its top wall, a cap catches light on top. */
+.sw-dial-key { --hi: var(--dial-slot-hi); --lo: var(--dial-slot-lo); background: linear-gradient(var(--ga), var(--hi) calc(0.5 * var(--u)), var(--lo) calc(1.4 * var(--u))); }
+.sw-dial-key.is-major { --hi: var(--dial-slot-major-hi); --lo: var(--dial-slot-major-lo); }
+.sw-dial-key > b {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(var(--ga),
+    color-mix(in oklab, var(--dial-on) 45%, white) 0,
+    color-mix(in oklab, var(--dial-on) 80%, white) calc(0.45 * var(--u)),
+    var(--dial-on) calc(0.9 * var(--u)),
+    var(--dial-on) calc(100% - 0.8 * var(--u)),
+    color-mix(in oklab, var(--dial-on) 72%, black) 100%);
+  /* The key's front face, seen from a little above: a darker copy of the cap, screen-down. */
+  box-shadow: calc(var(--sx) * var(--side)) calc(var(--sy) * var(--side)) 0 color-mix(in oklab, var(--dial-on) 58%, black);
+  opacity: 0;
+  scale: 0.82;
+  transition: opacity 200ms ease-in var(--d), scale 240ms ease-in var(--d), background 300ms var(--ease), box-shadow 300ms var(--ease);
+}
+.sw-dial-key.is-on > b {
+  opacity: 1;
+  scale: 1;
+  transition: opacity 140ms ease-out var(--d), scale 460ms cubic-bezier(0.3, 1.8, 0.45, 1) var(--d), background 300ms var(--ease);
+}
+.sw-dial-key.is-origin > b {
+  opacity: 1;
+  scale: 1;
+  background: linear-gradient(var(--ga), var(--dial-steel-hi) calc(0.6 * var(--u)), var(--dial-steel) calc(2 * var(--u)), var(--dial-steel) calc(100% - 1 * var(--u)), var(--dial-steel-lo) 100%);
+  box-shadow: calc(var(--sx) * 0.75 * var(--u)) calc(var(--sy) * 0.75 * var(--u)) 0 var(--dial-steel-lo);
+}
+
+.sw-dial-cast {
+  background: var(--dial-cast);
+  box-shadow: 0 0 calc(1 * var(--u)) calc(0.2 * var(--u)) var(--dial-cast);
+  opacity: 0;
+  translate: 0 0;
+  transition: opacity 220ms ease-in var(--d), translate 220ms ease-in var(--d);
+}
+.sw-dial-cast.is-on, .sw-dial-cast.is-origin {
+  opacity: var(--dial-cast-on);
+  /* `translate` applies in the parent's frame, so this is screen space: away from the lamp. */
+  translate: calc(0.42 * var(--lift)) calc(0.9 * var(--lift));
+  transition: opacity 200ms ease-out var(--d), translate 520ms cubic-bezier(0.3, 1.6, 0.45, 1) var(--d);
+}
+.sw-dial-cast.is-origin { translate: calc(0.84 * var(--u)) calc(1.8 * var(--u)); }
+
+/* --- groove and bearings --------------------------------------------------------------- */
+.sw-dial-groove { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.sw-dial-groove path { fill: none; stroke-linecap: round; }
+.sw-dial-groove-cut { stroke: var(--dial-groove); stroke-width: 2.4; }
+.sw-dial-groove-lip { stroke: var(--dial-groove-lip); stroke-width: 2.4; transform: translateY(0.6px); }
+.sw-dial-detent { r: 1.9px; fill: var(--dial-groove); }
+.sw-dial-port { r: 3.4px; fill: var(--dial-groove); }
+
+.sw-dial-bearings { position: absolute; inset: 0; }
+.sw-dial-bearing { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; }
+.sw-dial-bearing.is-on { opacity: 1; }
+.sw-dial-bearing > i {
+  position: absolute;
+  left: calc(-4.6 * var(--u));
+  top: calc(-132.6 * var(--u));
+  width: calc(9.2 * var(--u));
+  height: calc(9.2 * var(--u));
+  border-radius: 50%;
+  rotate: calc(-1 * var(--a)); /* cancels the carrier, so its light stays put while it rolls */
+  background:
+    radial-gradient(circle at 33% 27%, rgba(255, 255, 255, 0.95) 0, rgba(255, 255, 255, 0.5) 9%, rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 40% 34%, color-mix(in oklab, var(--dial-on) 72%, white) 0%, var(--dial-on) 42%, color-mix(in oklab, var(--dial-on) var(--dial-ball-body), black) 100%);
+  /* a little light bounced off the plate along the lower rim, then the contact shadow */
+  box-shadow:
+    inset 0 calc(-0.7 * var(--u)) calc(0.9 * var(--u)) color-mix(in oklab, var(--dial-on) 55%, white 20%),
+    0 calc(0.4 * var(--u)) calc(0.5 * var(--u)) rgba(0, 0, 0, 0.28),
+    0 calc(1.6 * var(--u)) calc(2 * var(--u)) var(--dial-cast);
+  transition: background 300ms var(--ease), box-shadow 300ms var(--ease);
+}
+
+/* --- readout ----------------------------------------------------------------------------- */
 .sw-dial-readout { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 2px; text-align: center; pointer-events: none; }
 .sw-dial-readout > * { pointer-events: auto; }
 .sw-dial-state { display: inline-flex; align-items: center; gap: 6px; height: 16px; margin-bottom: 12px; color: var(--text-2); font-size: 12px; font-weight: 500; }
 .sw-dial-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--face-color); transition: background 200ms var(--ease), box-shadow 200ms var(--ease); }
 .sw-dial:not(.is-running) .sw-dial-state i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
+
 .sw-dial-digits { display: flex; align-items: baseline; color: var(--text); font-size: 14.6cqi; font-weight: 500; line-height: 1; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; white-space: nowrap; transition: color 220ms var(--ease); }
-.sw-dial-sec { color: var(--text-2); }
-.sw-dial.is-idle .sw-dial-digits, .sw-dial.is-idle .sw-dial-sec { color: var(--text-3); }
+.sw-dial-digits .is-sec { color: var(--text-2); }
+.sw-dial.is-idle .sw-dial-digits, .sw-dial.is-idle .sw-dial-digits .is-sec { color: var(--text-3); }
+
+/* A drum per digit: the old digit turns up and away over the top, the new one comes up from
+   below, foreshortened as if on a cylinder. The window hugs the glyphs (SF digits sit between
+   0.164em and 0.892em of a line-height-1 box) and fades only outside them, so digits at rest are
+   untouched. */
+.sw-dial-drum {
+  position: relative;
+  display: inline-block;
+  clip-path: inset(0.08em 0 0.03em 0); /* not overflow, which would move the baseline */
+  -webkit-mask: linear-gradient(transparent 8%, #000 16%, #000 90%, transparent 97%) no-repeat;
+  mask: linear-gradient(transparent 8%, #000 16%, #000 90%, transparent 97%) no-repeat;
+}
+.sw-dial-dg { display: inline-block; }
+.sw-dial-dg.is-out { position: absolute; left: 0; top: 0; animation: sw-dial-out-up 360ms cubic-bezier(0.3, 0.7, 0.3, 1) both; }
+.sw-dial-dg.is-in { animation: sw-dial-in-up 360ms cubic-bezier(0.3, 0.7, 0.3, 1) both; }
+.sw-dial-dg.is-out.is-down { animation-name: sw-dial-out-down; }
+.sw-dial-dg.is-in.is-down { animation-name: sw-dial-in-down; }
+@keyframes sw-dial-in-up { from { transform: translateY(0.92em) scaleY(0.55); } to { transform: none; } }
+@keyframes sw-dial-out-up { from { transform: none; } to { transform: translateY(-0.92em) scaleY(0.55); } }
+@keyframes sw-dial-in-down { from { transform: translateY(-0.92em) scaleY(0.55); } to { transform: none; } }
+@keyframes sw-dial-out-down { from { transform: none; } to { transform: translateY(0.92em) scaleY(0.55); } }
 
 .sw-dial-task { position: relative; display: inline-flex; align-items: center; gap: 5px; max-width: 64cqi; margin-top: 14px; padding: 3px 8px; border-radius: var(--r-control); color: var(--text); font-size: 14px; font-weight: 500; line-height: 20px; transition: background 120ms ease; }
 .sw-dial-task.has-control { padding-right: 6px; }
@@ -49,5 +273,7 @@
 .sw-dial-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
-  .sw-dial-tick, .sw-dial-hour { transition: none !important; }
+  .sw-dial-key > b, .sw-dial-cast, .sw-dial-bearing > i { transition: none !important; }
+  .sw-dial-dg.is-in, .sw-dial-dg.is-out { animation: none !important; }
+  .sw-dial-dg.is-out { opacity: 0; }
 }

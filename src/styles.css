@@ -310,6 +310,10 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .task-meta .is-due-today { color: var(--text); font-weight: 500; }
 .task-meta .overdue { color: var(--danger); font-weight: 500; }
 .task-meta .is-focus { color: var(--c-today); }
+/* Tags: a dot in the tag's colour and its name. */
+.tag-chip { display: inline-flex; align-items: center; gap: 4px; min-width: 0; color: var(--text-2); font-size: 12px; line-height: 16px; white-space: nowrap; }
+.tag-chip i { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--tag-color); }
+.tag-chip i + i { margin-left: -1px; }
 .task-list-label { padding: 0 6px; border-radius: 4px; background: var(--surface-2); color: var(--text-2); font-size: 11.5px; line-height: 18px; }
 .subtask-toggle { margin: -2px -4px; padding: 2px 4px; border-radius: 4px; color: inherit; }
 .subtask-toggle:hover { color: var(--text); background: var(--surface-3); }
@@ -508,6 +512,35 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .time-done { background: var(--accent); color: var(--on-accent); }
 .time-done:hover { background: var(--accent-deep); }
 
+/* Tag picker: a filter field that also creates, a checklist, and an inline editor per tag. */
+.tag-trigger { display: inline-flex; align-items: center; gap: 10px; max-width: 230px; overflow: hidden; }
+.tag-trigger .tag-chip { color: inherit; font-size: inherit; }
+.tag-popover { width: 252px; padding: 8px; }
+.tag-filter { width: 100%; height: 28px; padding: 0 8px; border: 0; border-radius: var(--r-control); outline: 0; background: var(--field); color: var(--text); font-size: 13px; }
+.tag-options { display: flex; flex-direction: column; gap: 1px; max-height: 300px; margin-top: 6px; overflow-y: auto; }
+.tag-option { display: flex; align-items: center; border-radius: var(--r-control); }
+.tag-option:hover { background: var(--surface-2); }
+.tag-option-main { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; height: 30px; padding: 0 6px; color: var(--text); font-size: 13px; text-align: left; }
+.tag-option-main > i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
+.tag-option-main small { margin-left: auto; color: var(--text-3); font-size: 12px; white-space: nowrap; }
+.tag-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-check { display: grid; place-items: center; width: 14px; flex: 0 0 auto; color: var(--accent); }
+.tag-edit { display: grid; place-items: center; width: 24px; height: 24px; flex: 0 0 auto; margin-right: 3px; border-radius: 5px; color: var(--text-3); opacity: 0; }
+.tag-option:hover .tag-edit, .tag-edit:focus-visible { opacity: 1; }
+.tag-edit:hover { color: var(--text); background: var(--surface-3); }
+.tag-create { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px; border-radius: var(--r-control); color: var(--text-2); font-size: 13px; text-align: left; }
+.tag-create:hover { color: var(--text); background: var(--surface-2); }
+.tag-create svg { color: var(--accent); }
+.tag-editor { display: flex; flex-direction: column; gap: 8px; padding: 8px 6px; border-radius: var(--r-control); background: var(--surface-2); }
+.tag-editor input { height: 26px; padding: 0 6px; border: 0; border-radius: 5px; outline: 0; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--text); font-size: 13px; }
+.tag-colors { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+.tag-colors button { aspect-ratio: 1; border-radius: 50%; background: var(--tag-color); }
+.tag-colors button.is-on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--tag-color); }
+.tag-note { margin: 0; padding: 0 2px; color: var(--text-2); font-size: 12px; line-height: 16px; }
+.tag-editor-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.tag-delete { height: 26px; margin-right: auto; padding: 0 8px; border-radius: 6px; color: var(--danger); font-size: 12.5px; font-weight: 500; }
+.tag-delete:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+
 .context-menu { position: fixed; z-index: 40; width: 172px; padding: 5px; border-radius: var(--r-pop); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); animation: modalIn 120ms var(--ease); }
 .context-menu button { display: flex; align-items: center; gap: 9px; width: 100%; height: 30px; padding: 0 8px; border-radius: 5px; color: var(--text); text-align: left; font-size: 13px; }
 .context-menu button svg { color: var(--text-2); }
@@ -626,6 +659,8 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
 .cal-day-time-open-icon { width: 11px; height: 11px; flex: 0 0 auto; color: var(--c-timer); }
 .cal-day-time-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-day-time-row.is-open .cal-day-time-title { color: var(--text-2); }
+.cal-day-time-break { color: var(--text-3); font-size: 12px; }
+.cal-day-time-row.is-break .cal-day-time-value { color: var(--text-2); }
 .cal-day-time-row.is-done .cal-day-time-title { color: var(--text-2); text-decoration: line-through; text-decoration-color: var(--text-3); }
 .cal-day-time-value { color: var(--text-2); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .cal-day-time-row.is-running .cal-day-time-value { color: var(--c-timer); font-weight: 500; }
@@ -757,12 +792,25 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
 .sw-band-seg.is-live { box-shadow: 0 0 8px color-mix(in srgb, var(--seg-color) 45%, transparent); }
 .sw-band-cap { position: absolute; top: calc(50% - 4.5px); width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: var(--seg-color); box-shadow: 0 0 0 2px var(--bg); }
 .sw-band-cap::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--seg-color); animation: sw-pulse 1.8s ease-out infinite; }
+.sw-band-seg.is-hover { top: calc(50% - 3px); height: 6px; border-radius: 3px; }
+.sw-band-seg.is-break { top: calc(50% - 1px); height: 2px; border-radius: 1px; box-shadow: none; }
+.sw-band-gap { position: absolute; top: calc(50% - 2px); height: 4px; border-radius: 2px; background: var(--surface-3); }
 .sw-band-now { position: absolute; top: 3px; bottom: 3px; width: 1px; background: var(--text-3); opacity: 0.7; }
 .sw-band-labels { position: relative; height: 16px; margin-top: 4px; color: var(--text-3); font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; }
 .sw-band-labels span { position: absolute; top: 0; white-space: nowrap; transform: translateX(-50%); }
 .sw-band-labels .is-start { transform: none; }
 .sw-band-labels .is-now { color: var(--text-2); font-weight: 500; }
 .sw-band-labels .is-now.is-end { transform: translateX(-100%); }
+.sw-tip { position: absolute; bottom: calc(100% + 4px); z-index: 20; width: max-content; min-width: 168px; max-width: 280px; padding: 8px 10px; border-radius: var(--r-pop); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); transform: translateX(-50%); pointer-events: none; font-size: 12px; line-height: 16px; animation: sw-tip-in 120ms var(--ease); }
+.sw-tip-title { display: flex; align-items: center; gap: 6px; overflow: hidden; color: var(--text); font-size: 13px; font-weight: 600; line-height: 18px; white-space: nowrap; text-overflow: ellipsis; }
+.sw-tip-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--seg-color); }
+.sw-tip-meta { overflow: hidden; color: var(--text-2); white-space: nowrap; text-overflow: ellipsis; }
+.sw-tip-row { display: flex; justify-content: space-between; gap: 16px; margin-top: 6px; color: var(--text); font-variant-numeric: tabular-nums; }
+.sw-tip-row > span:last-child { color: var(--text-2); }
+.sw-tip-foot { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.sw-tip-line { display: flex; justify-content: space-between; gap: 16px; }
+.sw-tip-line > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes sw-tip-in { from { opacity: 0; } to { opacity: 1; } }
 .sw-sessions-empty { margin: 8px 0 0; color: var(--text-2); font-size: 13px; }
 @keyframes sw-pulse { from { transform: scale(1); opacity: 0.55; } to { transform: scale(2.9); opacity: 0; } }
 
@@ -788,9 +836,20 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
 .sw-row-play:hover { background: var(--surface-3); color: var(--text); }
 .sw-row.is-running .sw-row-play { color: var(--row-color); }
 .sw-row-divider { height: 1px; margin: 5px 8px; background: var(--border); }
+.sw-row-tag::before { content: ''; display: inline-block; width: 6px; height: 6px; margin: 0 4px 1px 8px; border-radius: 50%; background: var(--tag-color); }
+.sw-new-task { margin-top: 2px; }
+.sw-new-task .add-task-button { height: 40px; padding-left: 10px; }
+
+/* The day by tag, under the Today heading. */
+.sw-tag-totals { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 10px 0 2px; color: var(--text-2); font-size: 12px; line-height: 18px; }
+.sw-tag-total { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.sw-tag-total i { width: 7px; height: 7px; border-radius: 50%; background: var(--tag-color); }
+.sw-tag-total.is-untagged i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
+.sw-tag-total b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
 .sw-select-row { align-self: flex-start; height: 36px; margin-top: 4px; padding: 0 8px; }
 
 @media (prefers-reduced-motion: reduce) {
   .run-dot { animation: none; }
   .sw-row.is-running .sw-row-dot::after, .sw-band-cap::after { animation: none; opacity: 0; }
+  .sw-tip { animation: none; }
 }

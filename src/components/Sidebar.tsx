@@ -1,10 +1,12 @@
 import { CalendarDays, CheckCircle2, ChevronLeft, Download, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Timer, Trash2, Upload, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { isForToday, todayKey } from '../format'
-import { daySeconds, formatClock, formatSpent, isRunning, totalSeconds } from '../time'
+import { dayBalance, isBreakTask } from '../tags'
+import { formatClock, formatSpent, isRunning, totalSeconds } from '../time'
 import { useNow } from '../useNow'
 import type { Task, TaskList, ThemeMode, TimeTrack, ViewId } from '../types'
 import { ListRing, listProgress } from './ListRing'
+import { useTags } from './Tags'
 
 interface SidebarProps {
   collapsed: boolean
@@ -58,17 +60,16 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
   const openTasks = tasks.filter((task) => task.listId !== null && !task.completed)
   const todayCount = openTasks.filter(isForToday).length
   const starredCount = openTasks.filter((task) => task.starred).length
-  // Time logged today (the day turns over at 6 AM) on every task still in the app, open or
-  // completed, plus the open stopwatch; deleted tasks do not count. Ticks while anything runs.
+  // Working time logged today (the day turns over at 6 AM) on every task still in the app, open or
+  // completed, plus the open stopwatch; deleted tasks and break-tagged tasks do not count. Ticks
+  // while anything runs.
+  const { tags } = useTags()
   const runningTrack = tasks.find((task) => isRunning(task.time))?.time ?? (isRunning(stopwatch) ? stopwatch : null)
   const now = useNow(runningTrack !== null)
-  const today = todayKey()
-  const timedToday = tasks.filter((task) => daySeconds(task.time, today, now) >= 1)
-  const todayLabel = formatSpent(timedToday.reduce((sum, task) => sum + daySeconds(task.time, today, now), 0) + daySeconds(stopwatch, today, now))
-  const allTimeLabel = formatSpent(tasks.reduce((sum, task) => sum + totalSeconds(task.time, now), 0) + totalSeconds(stopwatch, now))
-  const todayHint = timedToday.length === 0
-    ? 'Time spent today'
-    : `Time spent today across ${timedToday.length} ${timedToday.length === 1 ? 'task' : 'tasks'}`
+  const today = dayBalance(tasks, stopwatch, tags, todayKey(), now)
+  const todayLabel = formatSpent(today.work)
+  const allTimeLabel = formatSpent(tasks.reduce((sum, task) => isBreakTask(task, tags) ? sum : sum + totalSeconds(task.time, now), 0) + totalSeconds(stopwatch, now))
+  const todayHint = `${today.tasks === 0 ? 'Time spent today' : `Time spent today across ${today.tasks} ${today.tasks === 1 ? 'task' : 'tasks'}`}${today.breaks >= 60 ? `, not counting ${formatSpent(today.breaks)} of breaks` : ''}`
 
   return (
     <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''}`}>
