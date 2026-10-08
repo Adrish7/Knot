@@ -1,0 +1,53 @@
+/* Dial face. Second ticks on the rim, minute ticks inside them, finished hours as dots along the
+   bottom. Lit marks take --face-color (the task's list colour or --c-timer); paused marks hold but
+   desaturate. */
+.sw-dial {
+  --sw-face-size: clamp(300px, 64cqi, 460px);
+  --sw-tick: color-mix(in srgb, var(--text) 15%, transparent);
+  --sw-tick-major: color-mix(in srgb, var(--text) 30%, transparent);
+  --sw-on: var(--face-color);
+  position: relative;
+  width: min(100%, var(--sw-face-size));
+  aspect-ratio: 1;
+  container-type: inline-size;
+}
+:root[data-theme='dark'] .sw-dial { --sw-tick: color-mix(in srgb, var(--text) 13%, transparent); --sw-tick-major: color-mix(in srgb, var(--text) 27%, transparent); }
+@container sw (min-width: 940px) {
+  .sw-layout .sw-dial { --sw-face-size: clamp(300px, 40cqi, 460px); }
+}
+.sw-dial.is-paused { --sw-on: color-mix(in oklab, var(--face-color) 32%, var(--text-3)); }
+
+.sw-dial-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; shape-rendering: geometricPrecision; }
+.sw-dial-hairline { fill: none; stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.sw-dial-tick { stroke: var(--sw-tick); stroke-linecap: butt; transition: stroke 300ms var(--ease); }
+.sw-dial-tick.is-s { stroke-width: 1.35; }
+.sw-dial-tick.is-m { stroke-width: 1.9; }
+.sw-dial-tick.is-major { stroke: var(--sw-tick-major); }
+.sw-dial-tick.is-origin { stroke: var(--text-2); }
+.sw-dial-tick.is-on { stroke: var(--sw-on); }
+.sw-dial-hour { r: 1.35px; fill: var(--sw-tick-major); transition: r 220ms var(--ease), fill 300ms var(--ease); }
+.sw-dial-hour.is-on { r: 3px; fill: var(--sw-on); }
+
+.sw-dial-readout { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 2px; text-align: center; pointer-events: none; }
+.sw-dial-readout > * { pointer-events: auto; }
+.sw-dial-state { display: inline-flex; align-items: center; gap: 6px; height: 16px; margin-bottom: 12px; color: var(--text-2); font-size: 12px; font-weight: 500; }
+.sw-dial-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--face-color); transition: background 200ms var(--ease), box-shadow 200ms var(--ease); }
+.sw-dial:not(.is-running) .sw-dial-state i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
+.sw-dial-digits { display: flex; align-items: baseline; color: var(--text); font-size: 14.6cqi; font-weight: 500; line-height: 1; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; white-space: nowrap; transition: color 220ms var(--ease); }
+.sw-dial-sec { color: var(--text-2); }
+.sw-dial.is-idle .sw-dial-digits, .sw-dial.is-idle .sw-dial-sec { color: var(--text-3); }
+
+.sw-dial-task { position: relative; display: inline-flex; align-items: center; gap: 5px; max-width: 64cqi; margin-top: 14px; padding: 3px 8px; border-radius: var(--r-control); color: var(--text); font-size: 14px; font-weight: 500; line-height: 20px; transition: background 120ms ease; }
+.sw-dial-task.has-control { padding-right: 6px; }
+.sw-dial-task.has-control:hover, .sw-dial-task.has-control:focus-within { background: var(--surface-2); }
+.sw-dial-task.has-control:has(select:focus-visible) { outline: 2px solid color-mix(in srgb, var(--face-color) 70%, transparent); outline-offset: 1px; }
+.sw-dial-task svg { color: var(--text-3); }
+.sw-dial-task-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-dial-task select { position: absolute; inset: 0; width: 100%; opacity: 0; }
+.sw-dial-list { display: inline-flex; align-items: center; gap: 6px; max-width: 64cqi; margin-top: 1px; color: var(--text-2); font-size: 12px; line-height: 16px; }
+.sw-dial-list i { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
+.sw-dial-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sw-dial-tick, .sw-dial-hour { transition: none !important; }
+}

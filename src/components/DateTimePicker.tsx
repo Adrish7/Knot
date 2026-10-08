@@ -1,7 +1,7 @@
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { dateKey, formatDue, sameDay } from '../format'
+import { dateKey, formatDue, sameDay, todayDate } from '../format'
 
 interface DateTimePickerProps {
   value: string | null
@@ -21,19 +21,25 @@ function shiftMonth(date: Date, months: number) {
   return new Date(date.getFullYear(), date.getMonth() + months, 1)
 }
 
-// Anchors the popover under its field (or above it when there is no room), closes it on an
-// outside press or Escape, and keeps it attached while anything else scrolls.
-function usePopover(open: boolean, setOpen: (open: boolean) => void, viewMonth: Date) {
+// Anchors the popover under its field (or above it when there is no room), asks to close on an
+// outside press or Escape, and keeps it attached while anything else scrolls. It re-anchors
+// whenever `layoutKey` changes, for content that resizes the popover. `align` picks which edge of
+// the field the popover lines up with when there is room.
+export function usePopover(open: boolean, onDismiss: (reason: 'outside' | 'escape') => void, layoutKey?: unknown, align: 'start' | 'end' = 'end') {
   const fieldRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const [coords, setCoords] = useState({ top: 0, left: 0 })
+  // The listeners below are bound once per opening, so they read the latest callback here.
+  const dismissRef = useRef(onDismiss)
+  dismissRef.current = onDismiss
 
   const reposition = () => {
     const field = fieldRef.current
     const popover = popoverRef.current
     if (!field || !popover) return
     const rect = field.getBoundingClientRect()
-    const left = Math.max(12, Math.min(rect.right - popover.offsetWidth, window.innerWidth - popover.offsetWidth - 12))
+    const preferred = align === 'start' ? rect.left : rect.right - popover.offsetWidth
+    const left = Math.max(12, Math.min(preferred, window.innerWidth - popover.offsetWidth - 12))
     let top = rect.bottom + 8
     if (top + popover.offsetHeight > window.innerHeight - 12) top = Math.max(12, rect.top - popover.offsetHeight - 8)
     setCoords({ top, left })
@@ -41,7 +47,7 @@ function usePopover(open: boolean, setOpen: (open: boolean) => void, viewMonth: 
 
   useLayoutEffect(() => {
     if (open) reposition()
-  }, [open, viewMonth])
+  }, [open, layoutKey])
 
   useEffect(() => {
     if (!open) return
@@ -49,12 +55,12 @@ function usePopover(open: boolean, setOpen: (open: boolean) => void, viewMonth: 
       const target = event.target
       if (!(target instanceof Node)) return
       if (popoverRef.current?.contains(target) || fieldRef.current?.contains(target)) return
-      setOpen(false)
+      dismissRef.current('outside')
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        setOpen(false)
+        dismissRef.current('escape')
       }
     }
     const onScroll = (event: Event) => {
@@ -74,12 +80,16 @@ function usePopover(open: boolean, setOpen: (open: boolean) => void, viewMonth: 
   return { fieldRef, popoverRef, coords }
 }
 
+// The popovers are portaled, but React still bubbles their events to the task row they came
+// from, where a click would open the task.
+const stopBubbling = (event: React.SyntheticEvent) => event.stopPropagation()
+
 function MonthGrid({ viewMonth, onViewMonth, isSelected, onPick }: { viewMonth: Date; onViewMonth: (month: Date) => void; isSelected: (day: Date) => boolean; onPick: (day: Date) => void }) {
   const firstWeekday = (viewMonth.getDay() + 6) % 7
   const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate()
   const cellCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7
   const cells = Array.from({ length: cellCount }, (_, index) => new Date(viewMonth.getFullYear(), viewMonth.getMonth(), index - firstWeekday + 1))
-  const today = new Date()
+  const today = todayDate()
 
   return (
     <>
@@ -109,11 +119,11 @@ function MonthGrid({ viewMonth, onViewMonth, isSelected, onPick }: { viewMonth: 
 
 export function FocusDayPicker({ dates, onChange }: { dates: string[]; onChange: (dates: string[]) => void }) {
   const [open, setOpen] = useState(false)
-  const [viewMonth, setViewMonth] = useState(() => monthStart(new Date()))
-  const { fieldRef, popoverRef, coords } = usePopover(open, setOpen, viewMonth)
+  const [viewMonth, setViewMonth] = useState(() => monthStart(todayDate()))
+  const { fieldRef, popoverRef, coords } = usePopover(open, () => setOpen(false), viewMonth)
 
   const openPicker = () => {
-    setViewMonth(monthStart(new Date()))
+    setViewMonth(monthStart(todayDate()))
     setOpen(true)
   }
 
@@ -128,12 +138,12 @@ export function FocusDayPicker({ dates, onChange }: { dates: string[]; onChange:
         Add a day
       </button>
       {open && createPortal(
-        <div className="date-popover" ref={popoverRef} role="dialog" aria-label="Choose focus days" style={coords}>
+        <div className="date-popover" ref={popoverRef} role="dialog" aria-label="Choose focus days" style={coords} onClick={stopBubbling} onMouseDown={stopBubbling} onDoubleClick={stopBubbling}>
           <MonthGrid viewMonth={viewMonth} onViewMonth={setViewMonth} isSelected={(day) => dates.includes(dateKey(day))} onPick={toggleDay} />
           <div className="date-popover-foot">
             <div className="date-shortcuts">
-              <button type="button" onClick={() => toggleDay(new Date())}>Today</button>
-              <button type="button" onClick={() => { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); toggleDay(tomorrow) }}>Tomorrow</button>
+              <button type="button" onClick={() => toggleDay(todayDate())}>Today</button>
+              <button type="button" onClick={() => { const tomorrow = todayDate(); tomorrow.setDate(tomorrow.getDate() + 1); toggleDay(tomorrow) }}>Tomorrow</button>
             </div>
           </div>
         </div>,
@@ -145,12 +155,12 @@ export function FocusDayPicker({ dates, onChange }: { dates: string[]; onChange:
 
 export function DateTimePicker({ value, placeholder, onChange, iconTrigger }: DateTimePickerProps) {
   const [open, setOpen] = useState(false)
-  const [viewMonth, setViewMonth] = useState(() => monthStart(new Date()))
-  const { fieldRef, popoverRef, coords } = usePopover(open, setOpen, viewMonth)
+  const [viewMonth, setViewMonth] = useState(() => monthStart(todayDate()))
+  const { fieldRef, popoverRef, coords } = usePopover(open, () => setOpen(false), viewMonth)
   const selected = value ? new Date(value) : null
 
   const openPicker = () => {
-    setViewMonth(monthStart(selected ?? new Date()))
+    setViewMonth(monthStart(selected ?? todayDate()))
     setOpen(true)
   }
 
@@ -201,7 +211,7 @@ export function DateTimePicker({ value, placeholder, onChange, iconTrigger }: Da
         </button>
       )}
       {open && createPortal(
-        <div className="date-popover" ref={popoverRef} role="dialog" aria-label="Choose date and time" style={coords}>
+        <div className="date-popover" ref={popoverRef} role="dialog" aria-label="Choose date and time" style={coords} onClick={stopBubbling} onMouseDown={stopBubbling} onDoubleClick={stopBubbling}>
           <MonthGrid viewMonth={viewMonth} onViewMonth={setViewMonth} isSelected={(day) => Boolean(selected && sameDay(day, selected))} onPick={commitDay} />
           <div className="date-popover-foot">
             <div className="date-shortcuts">

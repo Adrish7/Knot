@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, Menu, powerMonitor } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, Menu, powerMonitor, powerSaveBlocker } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 
@@ -6,7 +6,8 @@ app.setName('Knot')
 if (!app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'Knot Development'))
 
 const hasSingleInstanceLock = !app.isPackaged || app.requestSingleInstanceLock()
-if (!hasSingleInstanceLock) app.quit()
+// exit rather than quit, so this copy never gets as far as opening a window and saving.
+if (!hasSingleInstanceLock) app.exit(0)
 
 const notificationTimers = new Map()
 let notificationRefreshTimer = null
@@ -24,6 +25,7 @@ function backupStorePath() {
 // One snapshot per day, taken before the first save of that day, so a mistake can be undone
 // even after the rolling backup has been overwritten by later saves.
 const DAILY_SNAPSHOTS_KEPT = 7
+const IMPORT_SNAPSHOTS_KEPT = 10
 
 function snapshotDirectory() {
   return path.join(app.getPath('userData'), 'Backups')
@@ -131,7 +133,7 @@ function createWindow() {
     },
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) {
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     window.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
     window.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
@@ -141,8 +143,11 @@ function createWindow() {
   window.webContents.on('will-navigate', (event) => event.preventDefault())
 
   mainWindow = window
+  // The renderer can't release keep-awake once its window is gone, so the window does it.
+  window.webContents.on('render-process-gone', releaseKeepAwake)
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null
+    releaseKeepAwake()
   })
   return window
 }
@@ -218,35 +223,51 @@ function scheduleNotifications(data) {
     notificationRefreshTimer = setTimeout(() => scheduleNotifications(data), maximumDelay)
   }
 
-  const badgeNow = new Date()
-  const dueTodayCount = tasks.filter((task) => {
-    if (task.completed || !task.dueAt) return false
-    const due = new Date(task.dueAt)
-    return due.getFullYear() === badgeNow.getFullYear() && due.getMonth() === badgeNow.getMonth() && due.getDate() === badgeNow.getDate()
-  }).length
+  // The app's day turns over at 6 AM (src/format.ts), so the badge counts the same day.
+  const appDay = (date) => {
+    const shifted = new Date(date)
+    if (shifted.getHours() < 6) shifted.setDate(shifted.getDate() - 1)
+    return localDayKey(shifted)
+  }
+  const today = appDay(new Date())
+  const dueTodayCount = tasks.filter((task) => !task.completed && task.dueAt && appDay(new Date(task.dueAt)) === today).length
   if (process.platform === 'darwin') app.dock.setBadge(dueTodayCount ? String(dueTodayCount) : '')
 }
 
+// The rolling backup, then the newest daily snapshot that still reads as Knot data.
+async function recoverFromBackups() {
+  for (const candidate of [backupStorePath(), ...snapshotFiles()]) {
+    try {
+      const recovered = await readJsonFile(candidate)
+      if (!isKnotData(recovered)) continue
+      await fs.promises.copyFile(candidate, storePath())
+      return recovered
+    } catch {
+      // Try the next copy.
+    }
+  }
+  return null
+}
+
+// A file that is missing, unreadable, or readable but not Knot data falls back to the backups.
+// A damaged file is copied aside first. Only a first run (no file, no backups) returns null.
 ipcMain.handle('knot:load', async () => {
+  let failure = null
   try {
-    return await readJsonFile(storePath())
+    const data = await readJsonFile(storePath())
+    if (isKnotData(data)) return data
+    failure = new Error('The saved data is not in Knot’s format.')
   } catch (error) {
-    if (error.code === 'ENOENT') return null
+    if (error.code !== 'ENOENT') failure = error
+  }
+  if (failure) {
     const corruptCopy = path.join(app.getPath('userData'), `knot-data.corrupt-${Date.now()}.json`)
     await fs.promises.copyFile(storePath(), corruptCopy).catch(() => {})
-    // Fall back to the rolling backup, then to the newest daily snapshot that still reads.
-    for (const candidate of [backupStorePath(), ...snapshotFiles()]) {
-      try {
-        const recovered = await readJsonFile(candidate)
-        if (!isKnotData(recovered)) continue
-        await fs.promises.copyFile(candidate, storePath())
-        return recovered
-      } catch {
-        // Try the next copy.
-      }
-    }
-    throw error
   }
+  const recovered = await recoverFromBackups()
+  if (recovered) return recovered
+  if (failure) throw failure
+  return null
 })
 
 ipcMain.handle('knot:save', (_event, data) => persistData(data))
@@ -281,6 +302,8 @@ ipcMain.handle('knot:snapshot-before-import', async () => {
   try {
     fs.mkdirSync(snapshotDirectory(), { recursive: true })
     await fs.promises.copyFile(storePath(), path.join(snapshotDirectory(), `before-import-${Date.now()}.json`))
+    const imports = fs.readdirSync(snapshotDirectory()).filter((name) => /^before-import-\d+\.json$/.test(name)).sort().reverse()
+    for (const stale of imports.slice(IMPORT_SNAPSHOTS_KEPT)) fs.rmSync(path.join(snapshotDirectory(), stale), { force: true })
   } catch (error) {
     if (error.code !== 'ENOENT') throw error
   }
@@ -302,6 +325,20 @@ ipcMain.handle('knot:set-theme', (_event, theme) => {
 })
 
 ipcMain.handle('knot:set-launch-at-login', (_event, enabled) => setLaunchAtLogin(enabled))
+
+// While a stopwatch is on screen the display stays awake, so the time stays readable on a
+// second monitor during a long session.
+let awakeBlockerId = null
+function releaseKeepAwake() {
+  if (awakeBlockerId === null) return
+  powerSaveBlocker.stop(awakeBlockerId)
+  awakeBlockerId = null
+}
+ipcMain.handle('knot:keep-awake', (_event, enabled) => {
+  if (enabled && awakeBlockerId === null) awakeBlockerId = powerSaveBlocker.start('prevent-display-sleep')
+  if (!enabled) releaseKeepAwake()
+  return true
+})
 
 app.on('second-instance', () => {
   if (app.isReady()) revealMainWindow(true)

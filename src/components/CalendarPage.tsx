@@ -1,33 +1,52 @@
-import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Flag, Plus, X } from 'lucide-react'
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Flag, Plus, Timer, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { compareByDue, sortFocusDay } from '../data'
-import { dateKey, formatDayKey, formatDue, isForToday, isOverdue, todayKey } from '../format'
-import type { FocusStatus, Task, TaskList } from '../types'
+import { dateKey, dayKeyOf, formatDayKey, formatDue, isForToday, isOverdue, todayDate, todayKey } from '../format'
+import { TimeSpentPicker } from './TimeSpentPicker'
+import { daySeconds, formatSpent, hasTime, isRunning, trackDays } from '../time'
+import { useNow } from '../useNow'
+import type { FocusStatus, Task, TaskList, TimeTrack } from '../types'
 
 interface CalendarPageProps {
   tasks: Task[]
   lists: TaskList[]
+  stopwatch: TimeTrack // the open stopwatch, so its time counts in day totals
   onOpenTask: (taskId: string) => void
   onRenameTask: (taskId: string, title: string) => void
-  onAddFocusDate: (taskId: string, day: string, beforeTaskId: string | null) => void
-  onMoveFocusDate: (taskId: string, fromDay: string, toDay: string, beforeTaskId: string | null) => void
+  onSetTimeSpent: (taskId: string, seconds: number, day?: string) => void
+  onStopwatch: (taskId: string) => void
+  onPlaceTasks: (items: DragItem[], day: string, beforeTaskId: string | null) => void
+  onCopyTasks: (taskIds: string[], day: string, beforeTaskId: string | null) => void
   onRemoveFocusDate: (taskId: string, day: string) => void
   onSetFocusStatus: (taskId: string, day: string, status: FocusStatus | null) => void
   onAddTaskOnDay: (day: string, title: string) => void
-  onAddTask: (title: string, listId?: string) => void
+  onAddTask: (title: string, listId?: string, extras?: Partial<Task>) => void
 }
 
 type CalView = 'month' | 'week' | 'day' | 'year'
 
-interface DragInfo {
+interface DragItem {
   taskId: string
   fromDay: string | null // null when dragging from the tray or a deadline chip: drop adds a focus day
+}
+
+interface DragInfo {
+  items: DragItem[] // the chip grabbed, or every selected chip when it was one of them
 }
 
 interface DropHint {
   target: string // day key, or 'tray'
   beforeTaskId: string | null // the planned task the drop lands above; null means the end of the day
+  copying: boolean // ⌥ held: the drop makes new copies, so the originals stay where they are
 }
+
+interface ChipRef {
+  taskId: string
+  day: string
+  kind: 'focus' | 'due'
+}
+
+const chipSlot = (chip: ChipRef) => `${chip.day}:${chip.kind}:${chip.taskId}`
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const YEAR_MONTHS_BACK = 12
@@ -61,10 +80,11 @@ function monthGridDays(monthDate: Date) {
   return Array.from({ length: Math.ceil(span / 7) * 7 }, (_, index) => addDays(start, index))
 }
 
-export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocusDate, onMoveFocusDate, onRemoveFocusDate, onSetFocusStatus, onAddTaskOnDay, onAddTask }: CalendarPageProps) {
+export function CalendarPage({ tasks, lists, stopwatch, onOpenTask, onRenameTask, onSetTimeSpent, onStopwatch, onPlaceTasks, onCopyTasks, onRemoveFocusDate, onSetFocusStatus, onAddTaskOnDay, onAddTask }: CalendarPageProps) {
   const [view, setView] = useState<CalView>('month')
-  const [cursor, setCursor] = useState(() => new Date())
+  const [cursor, setCursor] = useState(() => todayDate())
   const [drag, setDrag] = useState<DragInfo | null>(null)
+  const [selection, setSelection] = useState<ChipRef[]>([]) // chips picked with Shift-click, dragged together
   const [dropHint, setDropHint] = useState<DropHint | null>(null)
   const [quickAddDay, setQuickAddDay] = useState<string | null>(null)
   const [quickTitle, setQuickTitle] = useState('')
@@ -77,8 +97,48 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
 
   useEffect(() => () => window.clearTimeout(openTimer.current), [])
 
+  // A plain click anywhere but a chip, or Escape, lets go of the selection.
+  useEffect(() => {
+    if (selection.length === 0) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (!event.shiftKey && !(event.target instanceof Element && event.target.closest('.cal-chip'))) setSelection([])
+    }
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setSelection([]) }
+    document.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [selection.length])
+
   const today = todayKey()
   const listById = useMemo(() => new Map(lists.map((list) => [list.id, list])), [lists])
+
+  // Time spent per day, across every task and the open stopwatch. Refreshed once a minute
+  // while a stopwatch runs, so today's figure keeps up.
+  const anyRunning = isRunning(stopwatch) || tasks.some((task) => isRunning(task.time))
+  // With nothing running every session is closed, so the time doesn't matter; a fixed value keeps
+  // the memo from recounting on every render.
+  const liveNow = useNow(anyRunning, 15_000)
+  const minuteNow = anyRunning ? liveNow : 0
+  const timeByDay = useMemo(() => {
+    const days = new Set<string>()
+    const collect = (track: TimeTrack) => { for (const day of trackDays(track, minuteNow)) days.add(day) }
+    collect(stopwatch)
+    for (const task of tasks) collect(task.time)
+    const map = new Map<string, { total: number; open: number; entries: { task: Task; seconds: number }[] }>()
+    for (const day of days) {
+      const entries = tasks
+        .map((task) => ({ task, seconds: daySeconds(task.time, day, minuteNow) }))
+        .filter((entry) => entry.seconds >= 1)
+        .sort((a, b) => b.seconds - a.seconds)
+      const open = daySeconds(stopwatch, day, minuteNow)
+      const total = entries.reduce((sum, entry) => sum + entry.seconds, 0) + open
+      if (total >= 1) map.set(day, { total, open, entries })
+    }
+    return map
+  }, [tasks, stopwatch, minuteNow])
 
   const days = useMemo(() => {
     if (view === 'day') return [new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate())]
@@ -90,7 +150,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
   }, [view, cursor])
 
   const yearMonths = useMemo(() => {
-    const base = new Date()
+    const base = todayDate()
     return Array.from(
       { length: YEAR_MONTHS_BACK + YEAR_MONTHS_FORWARD + 1 },
       (_, index) => new Date(base.getFullYear(), base.getMonth() - YEAR_MONTHS_BACK + index, 1),
@@ -110,7 +170,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
     for (const task of tasks) {
       for (const key of task.focusDates) entry(key).focus.push(task)
       if (task.dueAt && !task.completed) {
-        const key = dateKey(new Date(task.dueAt))
+        const key = dayKeyOf(new Date(task.dueAt))
         if (!task.focusDates.includes(key)) entry(key).due.push(task)
       }
     }
@@ -124,9 +184,12 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
     ))
     .sort(compareByDue), [tasks, trayList, today])
 
-  const dragTask = drag ? tasks.find((task) => task.id === drag.taskId) : null
-  const dragDueDay = dragTask?.dueAt ? dateKey(new Date(dragTask.dueAt)) : null
-  const dragListColor = dragTask?.listId ? listById.get(dragTask.listId)?.color : undefined
+  const selectedSlots = useMemo(() => new Set(selection.map(chipSlot)), [selection])
+  const dragTasks = drag ? drag.items.flatMap((item) => tasks.find((task) => task.id === item.taskId) ?? []) : []
+  const dragIds = new Set(drag?.items.map((item) => item.taskId))
+  const dragDueDay = dragTasks.length === 1 && dragTasks[0].dueAt ? dayKeyOf(new Date(dragTasks[0].dueAt)) : null
+  const dragListId = dragTasks.every((task) => task.listId === dragTasks[0]?.listId) ? dragTasks[0]?.listId : null
+  const dragListColor = dragListId ? listById.get(dragListId)?.color : undefined
   const trayListColor = trayList === 'all' || trayList === 'today' ? undefined : listById.get(trayList)?.color
 
   const label = view === 'month' || view === 'year'
@@ -172,8 +235,8 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
   }
 
   const goToday = () => {
-    setCursor(new Date())
-    if (view === 'year') scrollToMonth(new Date())
+    setCursor(todayDate())
+    if (view === 'year') scrollToMonth(todayDate())
   }
 
   const openDay = (date: Date) => {
@@ -181,10 +244,42 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
     setView('day')
   }
 
-  const startDrag = (event: React.DragEvent, taskId: string, fromDay: string | null) => {
+  // Where a chip sits on the calendar, so a selection drops in the order it reads.
+  const chipRank = (chip: ChipRef) => {
+    const cell = byDay.get(chip.day)
+    const index = chip.kind === 'focus'
+      ? cell?.focus.findIndex((task) => task.id === chip.taskId) ?? -1
+      : (cell?.focus.length ?? 0) + (cell?.due.findIndex((task) => task.id === chip.taskId) ?? -1)
+    return `${chip.day}:${String(index).padStart(4, '0')}`
+  }
+
+  const toDragItem = (chip: ChipRef): DragItem => ({ taskId: chip.taskId, fromDay: chip.kind === 'focus' ? chip.day : null })
+
+  const chipShown = (chip: ChipRef) => Boolean(byDay.get(chip.day)?.[chip.kind].some((task) => task.id === chip.taskId))
+
+  // Grabbing a selected chip carries the whole selection (less any chip since removed from the
+  // calendar); grabbing any other chip carries just it.
+  const startChipDrag = (event: React.DragEvent, chip: ChipRef) => {
+    const chips = selectedSlots.has(chipSlot(chip)) ? selection.filter(chipShown) : []
+    if (chips.length > 1) {
+      chips.sort((a, b) => chipRank(a).localeCompare(chipRank(b)))
+      startDrag(event, chips.map(toDragItem))
+      const ghost = document.createElement('div')
+      ghost.className = 'cal-drag-ghost'
+      ghost.textContent = `${chips.length} tasks`
+      document.body.appendChild(ghost)
+      event.dataTransfer.setDragImage(ghost, 14, 12)
+      window.setTimeout(() => ghost.remove())
+      return
+    }
+    setSelection([])
+    startDrag(event, [toDragItem(chip)])
+  }
+
+  const startDrag = (event: React.DragEvent, items: DragItem[]) => {
     event.dataTransfer.effectAllowed = 'copyMove'
-    event.dataTransfer.setData('text/plain', taskId)
-    setDrag({ taskId, fromDay })
+    event.dataTransfer.setData('text/plain', items.map((item) => item.taskId).join('\n'))
+    setDrag({ items })
   }
 
   const endDrag = () => {
@@ -192,12 +287,12 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
     setDropHint(null)
   }
 
-  // The planned chip the cursor would insert above: the first one (skipping the dragged task)
+  // The planned chip the cursor would insert above: the first one (skipping the tasks being moved)
   // whose vertical midpoint is below the cursor. Null means "after the last one".
-  const findBeforeTask = (cell: HTMLElement, clientY: number, taskId: string) => {
+  const findBeforeTask = (cell: HTMLElement, clientY: number, skip: Set<string>) => {
     for (const chip of cell.querySelectorAll<HTMLElement>('.cal-chip[data-focus-task]')) {
       const id = chip.dataset.focusTask
-      if (!id || id === taskId) continue
+      if (!id || skip.has(id)) continue
       const bounds = chip.getBoundingClientRect()
       if (clientY < bounds.top + bounds.height / 2) return id
     }
@@ -207,9 +302,10 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
   const dragOverDay = (event: React.DragEvent, day: string) => {
     if (!drag) return
     event.preventDefault()
-    event.dataTransfer.dropEffect = drag.fromDay && !event.altKey ? 'move' : 'copy'
-    const beforeTaskId = findBeforeTask(event.currentTarget as HTMLElement, event.clientY, drag.taskId)
-    setDropHint((current) => current?.target === day && current.beforeTaskId === beforeTaskId ? current : { target: day, beforeTaskId })
+    const copying = event.altKey
+    event.dataTransfer.dropEffect = copying || drag.items.every((item) => !item.fromDay) ? 'copy' : 'move'
+    const beforeTaskId = findBeforeTask(event.currentTarget as HTMLElement, event.clientY, copying ? new Set() : dragIds)
+    setDropHint((current) => current?.target === day && current.beforeTaskId === beforeTaskId && current.copying === copying ? current : { target: day, beforeTaskId, copying })
   }
 
   const dragLeaveDay = (event: React.DragEvent, day: string) => {
@@ -222,9 +318,12 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
   const dropOnDay = (event: React.DragEvent, day: string) => {
     event.preventDefault()
     if (!drag) return
-    const beforeTaskId = findBeforeTask(event.currentTarget as HTMLElement, event.clientY, drag.taskId)
-    if (drag.fromDay && (drag.fromDay === day || !event.altKey)) onMoveFocusDate(drag.taskId, drag.fromDay, day, beforeTaskId)
-    else onAddFocusDate(drag.taskId, day, beforeTaskId)
+    // ⌥ makes new, separate tasks; a plain drop moves the originals.
+    const copying = event.altKey
+    const beforeTaskId = findBeforeTask(event.currentTarget as HTMLElement, event.clientY, copying ? new Set() : dragIds)
+    if (copying) onCopyTasks(drag.items.map((item) => item.taskId), day, beforeTaskId)
+    else onPlaceTasks(drag.items, day, beforeTaskId)
+    setSelection([])
     endDrag()
   }
 
@@ -239,6 +338,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
   // it in place instead of landing on the details panel's scrim.
   const clickTask = (event: React.MouseEvent, taskId: string) => {
     window.clearTimeout(openTimer.current)
+    setSelection([])
     if (event.detail > 1) return
     openTimer.current = window.setTimeout(() => onOpenTask(taskId), OPEN_DELAY_MS)
   }
@@ -278,27 +378,35 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
 
   const renderChip =(task: Task, day: string, kind: 'focus' | 'due', dropEdge: 'before' | 'after' | null) => {
     const list = task.listId ? listById.get(task.listId) : undefined
-    const dueHere = task.dueAt ? dateKey(new Date(task.dueAt)) === day : false
-    const dragging = drag?.taskId === task.id && drag.fromDay === (kind === 'focus' ? day : null)
+    const dueHere = task.dueAt ? dayKeyOf(new Date(task.dueAt)) === day : false
+    const chip: ChipRef = { taskId: task.id, day, kind }
+    const dragging = Boolean(drag?.items.some((item) => item.taskId === task.id && item.fromDay === (kind === 'focus' ? day : null)))
+    const slot = chipSlot(chip)
+    const selected = selectedSlots.has(slot)
     const status = kind === 'focus' ? task.focusStatus[day] : undefined
     const nextStatus: FocusStatus | null = status === 'done' ? 'missed' : status === 'missed' ? null : 'done'
     const statusHint = status === 'done' ? 'Done this day — click to mark not done' : status === 'missed' ? 'Not done — click to clear' : 'Mark done for this day'
-    const slot = `${day}:${kind}:${task.id}`
     const editing = renaming === slot
     return (
       <div
         key={`${task.id}:${kind}`}
-        className={`cal-chip ${kind === 'due' ? 'is-due' : ''} ${task.completed ? 'is-done' : ''} ${status === 'done' ? 'is-day-done' : ''} ${status === 'missed' ? 'is-day-missed' : ''} ${dragging ? 'is-dragging' : ''} ${dropEdge ? `drop-${dropEdge}` : ''} ${editing ? 'is-editing' : ''}`}
+        className={`cal-chip ${kind === 'due' ? 'is-due' : ''} ${task.completed ? 'is-done' : ''} ${status === 'done' ? 'is-day-done' : ''} ${status === 'missed' ? 'is-day-missed' : ''} ${dragging ? 'is-dragging' : ''} ${dropEdge ? `drop-${dropEdge}` : ''} ${editing ? 'is-editing' : ''} ${selected ? 'is-selected' : ''}`}
         style={{ '--chip-color': list?.color ?? 'var(--accent)' } as React.CSSProperties}
         data-focus-task={kind === 'focus' ? task.id : undefined}
         role="button"
         tabIndex={0}
+        aria-pressed={selection.length > 0 ? selected : undefined}
         draggable={!editing}
-        onDragStart={(event) => startDrag(event, task.id, kind === 'focus' ? day : null)}
+        onDragStart={(event) => startChipDrag(event, chip)}
         onDragEnd={endDrag}
-        onClick={(event) => clickTask(event, task.id)}
+        onClick={(event) => {
+          if (event.shiftKey) {
+            window.clearTimeout(openTimer.current)
+            setSelection((current) => selected ? current.filter((item) => chipSlot(item) !== slot) : [...current, chip])
+          } else clickTask(event, task.id)
+        }}
         onDoubleClick={(event) => beginRename(event, task, slot)}
-        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenTask(task.id) } }}
+        onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenTask(task.id) } }}
         title={kind === 'due' ? `${task.title} — due, drag to plan a focus day` : task.title}
       >
         {kind === 'focus' && !task.completed ? (
@@ -315,6 +423,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
           </button>
         ) : task.completed ? <Check size={10} strokeWidth={3} /> : dueHere ? <Flag size={9} strokeWidth={2.5} /> : <span className="cal-chip-dot" />}
         {renderTitle(task, slot, 'cal-chip-title', 'cal-chip-input')}
+        {!editing && <TimeSpentPicker variant="chip" track={task.time} taskTitle={task.title} day={day} onChange={(seconds) => onSetTimeSpent(task.id, seconds, day)} onStopwatch={() => onStopwatch(task.id)} />}
         {kind === 'focus' && !editing && (
           <button
             className="cal-chip-remove"
@@ -337,10 +446,11 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
       ...(cell?.due ?? []).map((task) => ({ task, kind: 'due' as const })),
     ]
     const hint = dropHint?.target === key ? dropHint : null
-    const reordering = Boolean(hint && drag?.fromDay === key)
+    const reordering = Boolean(hint && !hint.copying && drag?.items.every((item) => item.fromDay === key))
+    const time = timeByDay.get(key)
     // Which edge of a planned chip the guide line sits on: above the chip the drop lands before,
-    // or below the last chip (other than the dragged one) when it lands at the end.
-    const lastOther = hint && hint.beforeTaskId === null ? focus.findLast((task) => task.id !== drag?.taskId) : undefined
+    // or below the last chip (other than the ones being moved) when it lands at the end.
+    const lastOther = hint && hint.beforeTaskId === null ? focus.findLast((task) => hint.copying || !dragIds.has(task.id)) : undefined
     const edgeFor = (task: Task, kind: 'focus' | 'due') => {
       if (!hint || kind !== 'focus') return null
       if (hint.beforeTaskId === task.id) return 'before' as const
@@ -359,6 +469,11 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
           {options.dayView
             ? <span className="cal-daynum">{date.getDate()}</span>
             : <button className="cal-daynum is-clickable" onClick={() => openDay(date)} title="Open day view">{date.getDate()}</button>}
+          {time && time.total >= 60 && (
+            <span className="cal-day-time" title={`${formatSpent(time.total)} spent on this day`}>
+              <Timer />{options.dayView || time.total < 36_000 ? formatSpent(time.total) : `${Math.floor(time.total / 3600)}h`}
+            </span>
+          )}
           {drag && dragDueDay === key && <Flag size={10} className="cal-due-flag" />}
           <button className="cal-add" onClick={() => { setQuickAddDay(key); setQuickTitle('') }} aria-label={`New task on ${key}`}><Plus size={13} /></button>
         </div>
@@ -385,6 +500,33 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
             />
           )}
         </div>
+        {options.dayView && time && (
+          <div className="cal-day-time-list" aria-label="Time spent on this day">
+            <div className="cal-day-time-head"><span><Timer size={12} />Time spent</span><span>{formatSpent(time.total)}</span></div>
+            {time.entries.map(({ task, seconds }) => {
+              const list = task.listId ? listById.get(task.listId) : undefined
+              return (
+                <button
+                  key={task.id}
+                  className={`cal-day-time-row ${isRunning(task.time) && key === today ? 'is-running' : ''} ${task.completed ? 'is-done' : ''}`}
+                  onClick={() => onOpenTask(task.id)}
+                  title={`Open ${task.title}`}
+                >
+                  <span className="cal-chip-dot" style={{ '--chip-color': list?.color ?? 'var(--accent)' } as React.CSSProperties} />
+                  <span className="cal-day-time-title">{task.title}</span>
+                  <span className="cal-day-time-value">{formatSpent(seconds)}</span>
+                </button>
+              )
+            })}
+            {time.open >= 1 && (
+              <div className={`cal-day-time-row is-open ${isRunning(stopwatch) && key === today ? 'is-running' : ''}`}>
+                <Timer size={11} className="cal-day-time-open-icon" />
+                <span className="cal-day-time-title">Open stopwatch</span>
+                <span className="cal-day-time-value">{formatSpent(time.open)}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -444,15 +586,16 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
         style={trayListColor ? { '--list-accent': trayListColor } as React.CSSProperties : undefined}
         aria-label="Tasks"
         onDragOver={(event) => {
-          if (!drag?.fromDay) return
+          if (!drag?.items.some((item) => item.fromDay)) return
           event.preventDefault()
           event.dataTransfer.dropEffect = 'move'
-          setDropHint((current) => current?.target === 'tray' ? current : { target: 'tray', beforeTaskId: null })
+          setDropHint((current) => current?.target === 'tray' ? current : { target: 'tray', beforeTaskId: null, copying: false })
         }}
         onDragLeave={() => setDropHint((current) => current?.target === 'tray' ? null : current)}
         onDrop={(event) => {
           event.preventDefault()
-          if (drag?.fromDay) onRemoveFocusDate(drag.taskId, drag.fromDay)
+          for (const item of drag?.items ?? []) if (item.fromDay) onRemoveFocusDate(item.taskId, item.fromDay)
+          setSelection([])
           endDrag()
         }}
       >
@@ -464,7 +607,8 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
           event.preventDefault()
           const title = trayTitle.trim()
           if (!title) return
-          if (trayList === 'today') onAddTaskOnDay(today, title)
+          // Planned for today in the first list, so it shows in the tray it was added from.
+          if (trayList === 'today') onAddTask(title, undefined, { focusDates: [today] })
           else onAddTask(title, trayList === 'all' ? undefined : trayList)
           setTrayTitle('')
         }}>
@@ -479,23 +623,24 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
             return (
               <div
                 key={task.id}
-                className={`cal-tray-item ${drag?.taskId === task.id ? 'is-dragging' : ''}`}
+                className={`cal-tray-item ${dragIds.has(task.id) ? 'is-dragging' : ''}`}
                 role="button"
                 tabIndex={0}
                 draggable={renaming !== slot}
-                onDragStart={(event) => startDrag(event, task.id, null)}
+                onDragStart={(event) => { setSelection([]); startDrag(event, [{ taskId: task.id, fromDay: null }]) }}
                 onDragEnd={endDrag}
                 onClick={(event) => clickTask(event, task.id)}
                 onDoubleClick={(event) => beginRename(event, task, slot)}
-                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenTask(task.id) } }}
+                onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenTask(task.id) } }}
               >
                 <span className="cal-chip-dot" style={{ '--chip-color': list?.color ?? 'var(--accent)' } as React.CSSProperties} />
                 <div className="cal-tray-item-body">
                   {renderTitle(task, slot, 'cal-tray-title', 'cal-quick cal-tray-input')}
-                  {(task.dueAt || nextFocus) && (
+                  {(task.dueAt || nextFocus || hasTime(task.time)) && (
                     <span className="cal-tray-meta">
                       {task.dueAt && <span className={`cal-tray-due ${isOverdue(task) ? 'overdue' : ''}`}>Due {formatDue(task.dueAt)}</span>}
                       {nextFocus && <span className="cal-tray-focus"><CalendarDays size={10} />{formatDayKey(nextFocus)}{task.focusDates.length > 1 && ` +${task.focusDates.length - 1}`}</span>}
+                      {hasTime(task.time) && <TimeSpentPicker variant="meta" track={task.time} taskTitle={task.title} onChange={(seconds) => onSetTimeSpent(task.id, seconds)} onStopwatch={() => onStopwatch(task.id)} />}
                     </span>
                   )}
                 </div>
@@ -508,7 +653,7 @@ export function CalendarPage({ tasks, lists, onOpenTask, onRenameTask, onAddFocu
             </div>
           )}
         </div>
-        <p className="cal-tray-hint">Drag tasks onto a day, or up and down within it to reorder. ⌥-drag a chip to add another day. Drop a chip here to unplan it. Double-click a task to rename it.</p>
+        <p className="cal-tray-hint">Drag tasks onto a day, or up and down within it to reorder. Shift-click chips to select several and drag them together. ⌥-drag to copy as a new task. Drop a chip here to unplan it. Double-click a task to rename it.</p>
       </aside>
     </main>
   )

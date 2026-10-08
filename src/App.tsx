@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, FolderOpen, Inbox, Pencil, Search, Star, Sun, Trash2 } from 'lucide-react'
+import { CalendarDays, CheckCircle2, FolderOpen, Inbox, Pencil, Search, Star, Sun, Timer, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Board } from './components/Board'
 import { CalendarPage } from './components/CalendarPage'
@@ -6,12 +6,15 @@ import { Completed } from './components/Completed'
 import { Header } from './components/Header'
 import { ConfirmModal, CreateListModal, RenameListModal } from './components/Modal'
 import { Sidebar } from './components/Sidebar'
+import { StopwatchPage } from './components/StopwatchPage'
 import { TaskPanel } from './components/TaskPanel'
 import { ListRing, listProgress } from './components/ListRing'
 import { Trash } from './components/Trash'
 import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sortFocusDay, sortStarred, uid } from './data'
-import { isForToday, todayKey } from './format'
-import type { DeletedTask, FocusStatus, KnotData, Task, TaskList, ThemeMode, ViewId } from './types'
+import { dateKey, dayKeyOf, isForToday, parseDateKey, todayDate, todayKey } from './format'
+import { useNow } from './useNow'
+import { daySeconds, emptyTrack, formatSpent, isRunning, mergeTracks, pauseTrack, setTotalSeconds, startTrack, totalSeconds } from './time'
+import type { DeletedTask, FocusStatus, KnotData, Task, TaskList, ThemeMode, TimeTrack, ViewId } from './types'
 
 const STORAGE_KEY = 'knot.desktop.data'
 const longDate = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
@@ -36,15 +39,84 @@ function newTaskSortOrder(tasks: Task[], listId: string) {
   ), 0)
 }
 
+// Every route into the trash goes through here, so a running stopwatch is always stopped.
 function makeTrashEntry(task: Task, lists: TaskList[]): DeletedTask {
-  return { task, listName: task.listId === null ? 'Calendar only' : lists.find((list) => list.id === task.listId)?.name ?? 'Untitled list', deletedAt: new Date().toISOString() }
+  return { task: { ...task, time: pauseTrack(task.time) }, listName: task.listId === null ? 'Calendar only' : lists.find((list) => list.id === task.listId)?.name ?? 'Untitled list', deletedAt: new Date().toISOString() }
+}
+
+// The next position at the end of a list.
+function endSortOrder(tasks: Task[], listId: string | null) {
+  return tasks.reduce((order, task) => task.listId === listId ? Math.max(order, task.sortOrder + 1) : order, 0)
+}
+
+// Puts a task on `day` (adding it, or moving it there from `fromDay`) at the position in that
+// day's list given by `beforeTaskId` — null appends, undefined keeps the task's current slot.
+// Every task planned on that day then gets an explicit position so the order sticks.
+function placeFocus(current: KnotData, taskId: string, day: string, fromDay: string | null, beforeTaskId: string | null | undefined): KnotData {
+  const moving = current.tasks.find((task) => task.id === taskId)
+  if (!moving) return current
+  let placed = moving
+  if (fromDay && fromDay !== day) {
+    const { [fromDay]: status, ...focusStatus } = moving.focusStatus
+    const { [fromDay]: _order, ...focusOrder } = moving.focusOrder
+    placed = {
+      ...moving,
+      focusDates: [...new Set([...moving.focusDates.filter((item) => item !== fromDay), day])].sort(),
+      focusStatus: status ? { ...focusStatus, [day]: status } : focusStatus,
+      focusOrder,
+    }
+  } else if (!moving.focusDates.includes(day)) {
+    placed = { ...moving, focusDates: [...moving.focusDates, day].sort() }
+  }
+  const ordered = sortFocusDay(current.tasks.filter((task) => task.focusDates.includes(day)), day)
+  const currentIndex = ordered.findIndex((task) => task.id === taskId)
+  const peers = ordered.filter((task) => task.id !== taskId)
+  const rawIndex = beforeTaskId === undefined ? currentIndex : beforeTaskId === null ? peers.length : peers.findIndex((task) => task.id === beforeTaskId)
+  peers.splice(rawIndex < 0 ? peers.length : rawIndex, 0, placed)
+  const orderOf = new Map(peers.map((task, position) => [task.id, position]))
+  return {
+    ...current,
+    tasks: current.tasks.map((task) => {
+      const next = task.id === taskId ? placed : task
+      const position = orderOf.get(next.id)
+      return position === undefined ? next : { ...next, focusOrder: { ...next.focusOrder, [day]: position } }
+    }),
+  }
+}
+
+// The next occurrence of a repeating task that has just been completed, or null when it doesn't
+// repeat. Tasks with a due date repeat by due date (and reminder, kept the same distance before it);
+// tasks without one repeat by their latest planned day, or today. Occurrences already in the past
+// are skipped, so finishing an overdue task schedules the next one ahead. `at` is when it was
+// completed, so reopening later still finds the copy that completing made.
+function nextRepeat(source: Task, at = Date.now()): Pick<Task, 'dueAt' | 'reminderAt' | 'focusDates'> | null {
+  if (source.recurrence === 'none') return null
+  if (source.dueAt) {
+    let dueAt = nextOccurrence(source.dueAt, source.recurrence)
+    while (dueAt && new Date(dueAt).getTime() <= at) dueAt = nextOccurrence(dueAt, source.recurrence)
+    if (!dueAt) return null
+    const reminderAt = source.reminderAt ? new Date(new Date(source.reminderAt).getTime() + new Date(dueAt).getTime() - new Date(source.dueAt).getTime()).toISOString() : null
+    // A calendar-only task lives on its planned days, so the next one is planned for its due day.
+    return { dueAt, reminderAt, focusDates: source.listId === null ? [dateKey(new Date(dueAt))] : [] }
+  }
+  const atDay = dayKeyOf(new Date(at))
+  const anchor = parseDateKey([...source.focusDates].sort().pop() ?? atDay)
+  anchor.setHours(12)
+  let next = nextOccurrence(anchor.toISOString(), source.recurrence)
+  while (next && dateKey(new Date(next)) <= atDay) next = nextOccurrence(next, source.recurrence)
+  return next ? { dueAt: null, reminderAt: null, focusDates: [dateKey(new Date(next))] } : null
 }
 
 function App() {
   const [data, setData] = useState<KnotData>(() => createSeedData())
   const [hydrated, setHydrated] = useState(false)
+  // When saved data couldn't be read, the fresh workspace on screen is not saved over it (and over
+  // its backups) until the user actually changes something.
+  const unreadData = useRef<KnotData | null>(null)
   const [selectedView, setSelectedView] = useState<ViewId>('all')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  // Which stopwatch the Stopwatch page shows: a task id, or null for the open stopwatch.
+  const [stopwatchTarget, setStopwatchTarget] = useState<string | null>(null)
   const [quickAddListId, setQuickAddListId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [createListOpen, setCreateListOpen] = useState(false)
@@ -52,7 +124,7 @@ function App() {
   const [listMenu, setListMenu] = useState<{ list: TaskList; x: number; y: number } | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; confirmLabel: string; run: () => void | Promise<void> } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-  // Bumped once a minute so day-relative views (Today, due labels) roll over at midnight.
+  // Bumped once a minute so day-relative views (Today, due labels) roll over when the day turns at 6 AM.
   const [clockTick, setClockTick] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -70,9 +142,11 @@ function App() {
         if (active && normalized) {
           setData(normalized)
         } else if (active && loaded) {
+          unreadData.current = data
           showToast('Saved data was not in a supported format. A fresh workspace is ready.')
         }
       } catch {
+        unreadData.current = data
         showToast('Could not open saved data. A fresh workspace is ready.')
       } finally {
         if (active) setHydrated(true)
@@ -83,6 +157,15 @@ function App() {
 
   useEffect(() => {
     if (!hydrated) return
+    // A stopwatch left running when the app closed is still running; show it first.
+    const running = data.tasks.find((task) => isRunning(task.time))
+    if (running) setStopwatchTarget(running.id)
+    // Only on first load: afterwards the target follows the user's choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated])
+
+  useEffect(() => {
+    if (!hydrated || data === unreadData.current) return
     const timer = window.setTimeout(async () => {
       try {
         if (window.knot) await window.knot.save(data)
@@ -95,7 +178,7 @@ function App() {
   }, [data, hydrated])
 
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated || data === unreadData.current) return
     const saveBeforeClose = () => {
       try {
         if (window.knot) window.knot.saveSync(data)
@@ -127,6 +210,15 @@ function App() {
     return () => media.removeEventListener('change', applyTheme)
   }, [data.preferences.theme])
 
+  const anyRunning = isRunning(data.stopwatch) || data.tasks.some((task) => isRunning(task.time))
+  // Keeps the Stopwatch page's header total current while something runs.
+  const headerNow = useNow(anyRunning && selectedView === 'stopwatch', 15_000)
+  useEffect(() => {
+    const awake = anyRunning && selectedView === 'stopwatch'
+    window.knot?.keepAwake?.(awake).catch(() => {})
+    return () => { if (awake) window.knot?.keepAwake?.(false).catch(() => {}) }
+  }, [anyRunning, selectedView])
+
   useEffect(() => {
     if (!hydrated || !window.knot) return
     window.knot.setLaunchAtLogin(data.preferences.launchAtLogin).catch(() => showToast('Could not update the login item.'))
@@ -140,7 +232,7 @@ function App() {
       }
       if (event.metaKey && event.key.toLowerCase() === 'n') {
         event.preventDefault()
-        if (selectedView === 'completed' || selectedView === 'trash' || selectedView === 'calendar') return
+        if (selectedView === 'completed' || selectedView === 'trash' || selectedView === 'calendar' || selectedView === 'stopwatch') return
         const firstListId = [...data.lists].sort((a, b) => a.sortOrder - b.sortOrder)[0]?.id
         const selectedId = selectedView.startsWith('list:') ? selectedView.slice(5) : firstListId
         if (selectedId) setQuickAddListId(selectedId)
@@ -182,9 +274,16 @@ function App() {
     if (selectedView === 'trash') return { title: 'Recently deleted', icon: <Trash2 />, color: 'var(--c-trash)', mode: 'smart' }
     if (searching) return { title: 'Search', icon: <Search />, color: 'var(--text-2)', subline: `${displayedTasks.length} ${displayedTasks.length === 1 ? 'result' : 'results'} for “${query.trim()}”`, mode: 'smart' }
     if (selectedView === 'all') return { title: 'All tasks', icon: <Inbox />, color: 'var(--c-all)', mode: 'board' }
-    if (selectedView === 'today') return { title: 'Today', icon: <Sun />, color: 'var(--c-today)', subline: longDate.format(new Date()), mode: 'smart' }
+    if (selectedView === 'today') return { title: 'Today', icon: <Sun />, color: 'var(--c-today)', subline: longDate.format(todayDate()), mode: 'smart' }
     if (selectedView === 'calendar') return { title: 'Calendar', icon: <CalendarDays />, color: 'var(--c-calendar)', subline: openTasksLabel(data.tasks.filter((task) => !task.completed).length), mode: 'smart' }
     if (selectedView === 'starred') return { title: 'Starred', icon: <Star fill="currentColor" />, color: 'var(--c-starred)', mode: 'smart' }
+    if (selectedView === 'stopwatch') {
+      const today = todayKey()
+      const timed = data.tasks.filter((task) => daySeconds(task.time, today, headerNow) > 0 || isRunning(task.time))
+      const total = timed.reduce((sum, task) => sum + daySeconds(task.time, today, headerNow), 0) + daySeconds(data.stopwatch, today, headerNow)
+      const subline = total < 60 && timed.length === 0 && !isRunning(data.stopwatch) ? 'Nothing timed yet today' : `Today ${formatSpent(total)}${timed.length > 0 ? ` across ${timed.length} ${timed.length === 1 ? 'task' : 'tasks'}` : ''}`
+      return { title: 'Stopwatch', icon: <Timer />, color: 'var(--c-timer)', subline, mode: 'smart' }
+    }
     const open = activeList ? data.tasks.filter((task) => task.listId === activeList.id && !task.completed).length : 0
     const done = activeList ? doneCounts[activeList.id] ?? 0 : 0
     return { title: activeList?.name ?? 'List', icon: <ListRing color={activeList?.color ?? 'var(--accent)'} progress={listProgress(open, done)} />, color: activeList?.color, subline: openTasksLabel(open), mode: 'list' }
@@ -214,61 +313,128 @@ function App() {
     showToast('Task added')
   }
 
-  const updateTask = (taskId: string, patch: Partial<Task>) => setData((current) => ({
-    ...current,
-    tasks: current.tasks.flatMap((task) => {
-      if (task.id !== taskId) return [task]
+  // A calendar-only task exists only on its planned days, so losing the last one sends it to
+  // Recently deleted, as it was before the change, so restoring brings its days back.
+  const trashIfDayless = (current: KnotData, original: Task, next: Task): KnotData | null => {
+    if (next.listId !== null || next.focusDates.length > 0) return null
+    return { ...current, tasks: current.tasks.filter((task) => task.id !== original.id), trash: [makeTrashEntry(original, current.lists), ...current.trash] }
+  }
+  const announceIfDayless = (taskId: string, remainingDays: (task: Task) => number) => {
+    const task = data.tasks.find((item) => item.id === taskId)
+    if (!task || task.listId !== null || remainingDays(task) > 0) return
+    setSelectedTaskId((current) => current === taskId ? null : current)
+    showToast('Moved to Recently deleted')
+  }
+
+  const updateTask = (taskId: string, patch: Partial<Task>) => {
+    if (patch.focusDates) announceIfDayless(taskId, () => patch.focusDates!.length)
+    setData((current) => {
+      const task = current.tasks.find((item) => item.id === taskId)
+      if (!task) return current
       const next = { ...task, ...patch }
-      if (next.listId === null && next.focusDates.length === 0) return []
+      const trashed = trashIfDayless(current, task, next)
+      if (trashed) return trashed
       if (patch.focusDates && !patch.focusStatus) {
         next.focusStatus = Object.fromEntries(Object.entries(next.focusStatus).filter(([day]) => next.focusDates.includes(day)))
       }
       if (patch.starred === false) next.starredOrder = null
-      return [next]
-    }),
-  }))
+      return { ...current, tasks: current.tasks.map((item) => item.id === taskId ? next : item) }
+    })
+  }
 
   const toggleStar = (taskId: string) => {
     const task = data.tasks.find((item) => item.id === taskId)
     if (task) updateTask(taskId, { starred: !task.starred })
   }
 
-  // Puts a task on `day` (adding it, or moving it there from `fromDay`) at the position in that
-  // day's list given by `beforeTaskId` — null appends, undefined keeps the task's current slot.
-  // Every task planned on that day then gets an explicit position so the order sticks.
-  const placeFocus = (taskId: string, day: string, fromDay: string | null, beforeTaskId: string | null | undefined) => setData((current) => {
-    const moving = current.tasks.find((task) => task.id === taskId)
-    if (!moving) return current
-    let placed = moving
-    if (fromDay && fromDay !== day) {
-      const { [fromDay]: status, ...focusStatus } = moving.focusStatus
-      const { [fromDay]: _order, ...focusOrder } = moving.focusOrder
-      placed = {
-        ...moving,
-        focusDates: [...new Set([...moving.focusDates.filter((item) => item !== fromDay), day])].sort(),
-        focusStatus: status ? { ...focusStatus, [day]: status } : focusStatus,
-        focusOrder,
-      }
-    } else if (!moving.focusDates.includes(day)) {
-      placed = { ...moving, focusDates: [...moving.focusDates, day].sort() }
-    }
-    const ordered = sortFocusDay(current.tasks.filter((task) => task.focusDates.includes(day)), day)
-    const currentIndex = ordered.findIndex((task) => task.id === taskId)
-    const peers = ordered.filter((task) => task.id !== taskId)
-    const rawIndex = beforeTaskId === undefined ? currentIndex : beforeTaskId === null ? peers.length : peers.findIndex((task) => task.id === beforeTaskId)
-    peers.splice(rawIndex < 0 ? peers.length : rawIndex, 0, placed)
-    const orderOf = new Map(peers.map((task, position) => [task.id, position]))
-    return {
-      ...current,
-      tasks: current.tasks.map((task) => {
-        const next = task.id === taskId ? placed : task
-        const position = orderOf.get(next.id)
-        return position === undefined ? next : { ...next, focusOrder: { ...next.focusOrder, [day]: position } }
-      }),
-    }
+  // ----- Stopwatches. A target is a task id, or null for the open stopwatch. Only one runs at a time.
+  const trackOf = (current: KnotData, target: string | null) => target === null ? current.stopwatch : current.tasks.find((task) => task.id === target)?.time ?? null
+  const withTrack = (current: KnotData, target: string | null, change: (track: TimeTrack) => TimeTrack): KnotData => {
+    if (target === null) return { ...current, stopwatch: change(current.stopwatch) }
+    return { ...current, tasks: current.tasks.map((task) => task.id === target ? { ...task, time: change(task.time) } : task) }
+  }
+  const pauseAll = (current: KnotData, now: number): KnotData => ({
+    ...current,
+    stopwatch: pauseTrack(current.stopwatch, now),
+    tasks: current.tasks.map((task) => isRunning(task.time) ? { ...task, time: pauseTrack(task.time, now) } : task),
   })
-  const addFocusDate = (taskId: string, day: string, beforeTaskId?: string | null) => placeFocus(taskId, day, null, beforeTaskId)
-  const moveFocusDate = (taskId: string, fromDay: string, toDay: string, beforeTaskId?: string | null) => placeFocus(taskId, toDay, fromDay, beforeTaskId)
+  const stopwatchName = (target: string | null) => target === null ? 'the open stopwatch' : `“${data.tasks.find((task) => task.id === target)?.title ?? 'task'}”`
+
+  const startStopwatch = (target: string | null) => {
+    const now = Date.now()
+    // Already running: leave the session alone rather than closing and reopening it.
+    setData((current) => {
+      const track = trackOf(current, target)
+      if (!track || isRunning(track)) return current
+      return withTrack(pauseAll(current, now), target, (running) => startTrack(running, now))
+    })
+    setStopwatchTarget(target)
+  }
+  const pauseStopwatch = (target: string | null) => {
+    const now = Date.now()
+    setData((current) => withTrack(current, target, (track) => pauseTrack(track, now)))
+  }
+  // Changes go on `day` (the calendar passes the day it was made from), never on a future day.
+  const adjustStopwatch = (target: string | null, seconds: number, day = todayKey()) => {
+    const now = Date.now()
+    const onDay = day < todayKey() ? day : todayKey()
+    setData((current) => withTrack(current, target, (track) => setTotalSeconds(track, seconds, onDay, now)))
+  }
+  const resetStopwatch = (target: string | null) => {
+    const track = trackOf(data, target)
+    if (!track) return
+    const run = () => setData((current) => withTrack(current, target, () => emptyTrack()))
+    if (totalSeconds(track) < 60) return run()
+    setConfirmAction({
+      title: 'Reset stopwatch',
+      message: `${formatSpent(totalSeconds(track))} on ${stopwatchName(target)} will be cleared.`,
+      confirmLabel: 'Reset',
+      run: () => { run(); showToast('Stopwatch reset') },
+    })
+  }
+  // Opens the Stopwatch page on a task and starts it (or keeps it running).
+  const openStopwatchFor = (taskId: string) => {
+    startStopwatch(taskId)
+    setSelectedView('stopwatch')
+    setQuery('')
+    setSelectedTaskId(null)
+    setQuickAddListId(null)
+  }
+  // Moves everything on the open stopwatch onto a task, then clears the open stopwatch.
+  const moveOpenToTask = (taskId: string) => {
+    const now = Date.now()
+    const title = data.tasks.find((task) => task.id === taskId)?.title
+    if (!title) return
+    setData((current) => ({
+      ...current,
+      stopwatch: emptyTrack(),
+      tasks: current.tasks.map((task) => task.id === taskId ? { ...task, time: mergeTracks(task.time, current.stopwatch, now) } : task),
+    }))
+    setStopwatchTarget(taskId)
+    showToast(`Time moved to “${title}”`)
+  }
+
+  // Drops dragged calendar tasks on `day`, in order, at the spot `beforeTaskId` marks. Items
+  // dragged from a day move off it; items from the tray or a deadline chip gain the day.
+  const placeTasks = (items: { taskId: string; fromDay: string | null }[], day: string, beforeTaskId: string | null) => setData((current) => (
+    items.reduce((next, item) => placeFocus(next, item.taskId, day, item.fromDay, beforeTaskId), current)
+  ))
+
+  // Copies tasks onto `day` as new, separate tasks: same title, list and subtasks (unchecked),
+  // nothing else, so time, notes and day outcomes stay with the originals.
+  const copyTasksToDay = (taskIds: string[], day: string, beforeTaskId: string | null) => {
+    const ids = [...new Set(taskIds)]
+    setData((current) => ids.reduce((next, taskId) => {
+      const source = next.tasks.find((task) => task.id === taskId)
+      if (!source) return next
+      const copy: Task = {
+        ...createTask(source.listId, source.title, endSortOrder(next.tasks, source.listId)),
+        subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })),
+      }
+      return placeFocus({ ...next, tasks: [...next.tasks, copy] }, copy.id, day, null, beforeTaskId)
+    }, current))
+    showToast(ids.length === 1 ? 'Task copied' : `${ids.length} tasks copied`)
+  }
 
   // Drag-to-reorder on the Today and Starred pages. The moved task lands before `beforeTaskId`
   // (null appends) and every task on the page gets an explicit position so the order sticks.
@@ -293,17 +459,19 @@ function App() {
   }
   const reorderStarred = (taskId: string, beforeTaskId: string | null) => reorderView(taskId, beforeTaskId, (task) => task.starred, sortStarred, (task, position) => ({ ...task, starredOrder: position }))
 
-  const removeFocusDate = (taskId: string, day: string) => setData((current) => ({
-    ...current,
-    tasks: current.tasks.flatMap((task) => {
-      if (task.id !== taskId) return [task]
+  const removeFocusDate = (taskId: string, day: string) => {
+    announceIfDayless(taskId, (task) => task.focusDates.filter((item) => item !== day).length)
+    setData((current) => {
+      const task = current.tasks.find((item) => item.id === taskId)
+      if (!task) return current
       const focusDates = task.focusDates.filter((item) => item !== day)
-      if (task.listId === null && focusDates.length === 0) return []
+      const trashed = trashIfDayless(current, task, { ...task, focusDates })
+      if (trashed) return trashed
       const { [day]: _removedStatus, ...focusStatus } = task.focusStatus
       const { [day]: _removedOrder, ...focusOrder } = task.focusOrder
-      return [{ ...task, focusDates, focusStatus, focusOrder }]
-    }),
-  }))
+      return { ...current, tasks: current.tasks.map((item) => item.id === taskId ? { ...task, focusDates, focusStatus, focusOrder } : item) }
+    })
+  }
 
   const setFocusStatus = (taskId: string, day: string, status: FocusStatus | null) => setData((current) => ({
     ...current,
@@ -339,15 +507,16 @@ function App() {
     setData((current) => {
       const source = current.tasks.find((task) => task.id === taskId)
       if (!source) return current
-      const tasks = current.tasks.map((task) => task.id === taskId ? { ...task, completed, completedAt: completed ? new Date().toISOString() : null } : task)
-      if (completed && !source.completed && source.recurrence !== 'none' && source.dueAt) {
-        const nextDue = nextOccurrence(source.dueAt, source.recurrence)
-        const nextReminder = source.reminderAt ? nextOccurrence(source.reminderAt, source.recurrence) : null
-        const alreadyCreated = tasks.some((task) => task.id !== source.id && !task.completed && task.listId === source.listId && task.dueAt === nextDue && task.title === source.title && task.recurrence === source.recurrence)
-        if (!alreadyCreated) {
-          const next: Task = { ...source, id: uid('task'), dueAt: nextDue, focusDates: [], focusStatus: {}, focusOrder: {}, reminderAt: nextReminder, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: tasks.filter((task) => task.listId === source.listId).length, subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })) }
-          tasks.push(next)
-        }
+      let tasks = current.tasks.map((task) => task.id === taskId ? { ...task, completed, completedAt: completed ? new Date().toISOString() : null, time: completed ? pauseTrack(task.time) : task.time } : task)
+      const repeat = nextRepeat(source, !completed && source.completedAt ? new Date(source.completedAt).getTime() : Date.now())
+      const isNextCopy = (task: Task) => repeat !== null && task.id !== source.id && !task.completed && task.listId === source.listId && task.title === source.title && task.recurrence === source.recurrence && task.dueAt === repeat.dueAt && (repeat.dueAt !== null || task.focusDates.join() === repeat.focusDates.join())
+      if (completed && !source.completed && repeat && !tasks.some(isNextCopy)) {
+        tasks.push({ ...source, ...repeat, id: uid('task'), focusStatus: {}, focusOrder: {}, starredOrder: null, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: endSortOrder(tasks, source.listId), subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })), time: emptyTrack() })
+      }
+      // Reopening takes back the copy completing made, as long as nothing has been done with it.
+      if (!completed && source.completed && repeat) {
+        const untouched = (task: Task) => isNextCopy(task) && totalSeconds(task.time) === 0 && task.subtasks.every((item) => !item.completed) && task.createdAt >= (source.completedAt ?? '')
+        tasks = tasks.filter((task) => !untouched(task))
       }
       return { ...current, tasks }
     })
@@ -374,13 +543,13 @@ function App() {
       const entry = current.trash.find((item) => item.task.id === taskId)
       if (!entry) return current
       const lists = [...current.lists]
-      let listId = entry.task.listId
+      const listId = entry.task.listId
       if (listId !== null && !lists.some((list) => list.id === listId)) {
-        const revived: TaskList = { id: uid('list'), name: entry.listName, color: palette[lists.length % palette.length], createdAt: new Date().toISOString(), sortOrder: lists.length }
+        // Revived under its old id, so restoring the list's other tasks puts them back in it too.
+        const revived: TaskList = { id: listId, name: entry.listName, color: palette[lists.length % palette.length], createdAt: new Date().toISOString(), sortOrder: lists.length }
         lists.push(revived)
-        listId = revived.id
       }
-      const restored: Task = { ...entry.task, listId, sortOrder: current.tasks.filter((task) => task.listId === listId).length }
+      const restored: Task = { ...entry.task, listId, sortOrder: endSortOrder(current.tasks, listId) }
       return {
         ...current,
         lists,
@@ -406,7 +575,9 @@ function App() {
   }
 
   const clearCompleted = () => {
-    const count = data.tasks.filter((task) => task.completed).length
+    // Only what the Completed page shows; finished calendar-only tasks stay on the calendar.
+    const cleared = (task: Task) => task.completed && task.listId !== null
+    const count = data.tasks.filter(cleared).length
     if (count === 0) return
     setConfirmAction({
       title: 'Clear completed',
@@ -415,8 +586,8 @@ function App() {
       run: () => {
         setData((current) => ({
           ...current,
-          tasks: current.tasks.filter((task) => !task.completed),
-          trash: [...current.tasks.filter((task) => task.completed).map((task) => makeTrashEntry(task, current.lists)), ...current.trash],
+          tasks: current.tasks.filter((task) => !cleared(task)),
+          trash: [...current.tasks.filter(cleared).map((task) => makeTrashEntry(task, current.lists)), ...current.trash],
         }))
         showToast('Completed tasks cleared')
       },
@@ -515,7 +686,10 @@ function App() {
     try {
       const file = await window.knot?.importData()
       if (file == null) return
-      imported = normalizeData(file)
+      // Only Knot's own export format; the current preferences (appearance, login item) stay.
+      const isExport = typeof file === 'object' && (file as { version?: unknown }).version === 1 && Array.isArray((file as { tasks?: unknown }).tasks)
+      const normalized = isExport ? normalizeData(file) : null
+      imported = normalized && { ...normalized, preferences: data.preferences }
     } catch {
       imported = null
     }
@@ -536,6 +710,7 @@ function App() {
           return
         }
         setData(next)
+        setStopwatchTarget(next.tasks.find((task) => isRunning(task.time))?.id ?? null)
         setSelectedView('all')
         setSelectedTaskId(null)
         showToast('Data imported')
@@ -570,6 +745,7 @@ function App() {
         collapsed={data.preferences.sidebarCollapsed}
         lists={sortedLists}
         tasks={data.tasks}
+        stopwatch={data.stopwatch}
         selectedView={selectedView}
         completedCount={completedTasks.length}
         trashCount={data.trash.length}
@@ -599,19 +775,35 @@ function App() {
           onSort={(sortMode) => updatePreferences({ sortMode })}
           onRenameTitle={!searching && activeList ? (name) => renameListById(activeList.id, name) : undefined}
         />
-        {selectedView === 'completed' ? <Completed tasks={completedTasks} lists={sortedLists} onOpen={setSelectedTaskId} onReopen={(taskId) => completeTask(taskId, false)} onDelete={deleteTask} onClear={clearCompleted} />
+        {selectedView === 'completed' ? <Completed tasks={completedTasks} lists={sortedLists} onOpen={setSelectedTaskId} onReopen={(taskId) => completeTask(taskId, false)} onDelete={deleteTask} onSetTimeSpent={adjustStopwatch} onStopwatch={openStopwatchFor} onClear={clearCompleted} />
           : selectedView === 'trash' ? <Trash entries={data.trash} onRestore={restoreTask} onPurge={purgeTask} onEmpty={emptyTrash} />
+          : selectedView === 'stopwatch' && !searching ? <StopwatchPage
+            tasks={data.tasks}
+            lists={sortedLists}
+            open={data.stopwatch}
+            target={stopwatchTarget}
+            onTarget={setStopwatchTarget}
+            onStart={startStopwatch}
+            onPause={pauseStopwatch}
+            onReset={resetStopwatch}
+            onAdjust={adjustStopwatch}
+            onMoveOpenToTask={moveOpenToTask}
+            onOpenTask={setSelectedTaskId}
+          />
           : selectedView === 'calendar' && !searching ? <CalendarPage
             tasks={data.tasks}
             lists={sortedLists}
+            stopwatch={data.stopwatch}
             onOpenTask={setSelectedTaskId}
             onRenameTask={(taskId, title) => updateTask(taskId, { title })}
-            onAddFocusDate={addFocusDate}
-            onMoveFocusDate={moveFocusDate}
+            onSetTimeSpent={adjustStopwatch}
+            onStopwatch={openStopwatchFor}
+            onPlaceTasks={placeTasks}
+            onCopyTasks={copyTasksToDay}
             onRemoveFocusDate={removeFocusDate}
             onSetFocusStatus={setFocusStatus}
             onAddTaskOnDay={addTaskOnDay}
-            onAddTask={(title, listId) => { const target = listId ?? sortedLists[0]?.id; if (target) addTask(target, title); else setCreateListOpen(true) }}
+            onAddTask={(title, listId, extras) => { const target = listId ?? sortedLists[0]?.id; if (target) addTask(target, title, false, extras); else setCreateListOpen(true) }}
           /> : <Board
             mode={page.mode}
             lists={sortedLists}
@@ -633,6 +825,8 @@ function App() {
             onStarTask={toggleStar}
             onDeleteTask={deleteTask}
             onSetDueTask={(taskId, dueAt) => updateTask(taskId, { dueAt })}
+            onSetTimeSpentTask={adjustStopwatch}
+            onStopwatchTask={openStopwatchFor}
             onRenameTask={(taskId, title) => updateTask(taskId, { title })}
             onRenameList={renameListById}
             onListMenu={openListMenu}
@@ -643,7 +837,7 @@ function App() {
           />}
       </section>
 
-      {selectedTask && <><button className="panel-scrim" onClick={() => setSelectedTaskId(null)} aria-label="Close details" /><TaskPanel task={selectedTask} lists={sortedLists} onUpdate={(patch) => {
+      {selectedTask && <><button className="panel-scrim" onClick={() => setSelectedTaskId(null)} aria-label="Close details" /><TaskPanel task={selectedTask} lists={sortedLists} onStopwatch={() => openStopwatchFor(selectedTask.id)} onSetTimeSpent={(seconds) => adjustStopwatch(selectedTask.id, seconds)} onUpdate={(patch) => {
         if (patch.listId && patch.listId !== selectedTask.listId) moveTask(selectedTask.id, patch.listId)
         else updateTask(selectedTask.id, patch)
       }} onComplete={(completed) => completeTask(selectedTask.id, completed)} onDelete={() => deleteTask(selectedTask.id)} onClose={() => setSelectedTaskId(null)} /></>}

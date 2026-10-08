@@ -1,5 +1,6 @@
-import { dateKey } from './format'
-import type { DeletedTask, FocusStatus, KnotData, Preferences, Recurrence, SortMode, Subtask, Task, TaskList, ThemeMode } from './types'
+import { dateKey, dayKeyOf, todayDate, todayKey } from './format'
+import { emptyTrack, isRunning, pauseTrack, runningSince } from './time'
+import type { DeletedTask, FocusStatus, KnotData, Preferences, Recurrence, SortMode, Subtask, Task, TaskList, ThemeMode, TimeSession, TimeTrack } from './types'
 
 export const TRASH_RETENTION_DAYS = 30
 
@@ -37,7 +38,7 @@ function isoDate(daysFromNow: number, hour = 17, minute = 0) {
 }
 
 function dayKey(daysFromNow: number) {
-  const date = new Date()
+  const date = todayDate()
   date.setDate(date.getDate() + daysFromNow)
   return dateKey(date)
 }
@@ -87,6 +88,7 @@ export function createTask(listId: string | null, title: string, sortOrder: numb
     createdAt: new Date().toISOString(),
     sortOrder,
     subtasks: [],
+    time: emptyTrack(),
   }
 }
 
@@ -126,6 +128,7 @@ export function createSeedData(): KnotData {
       make(somedayId, 'Learn to make fresh pasta', 1),
     ],
     trash: [],
+    stopwatch: emptyTrack(),
     preferences: createDefaultPreferences(),
   }
 }
@@ -190,13 +193,28 @@ export function normalizeData(value: unknown): KnotData | null {
     }]
   })
 
+  // Only one stopwatch runs at a time: the one started last keeps running and any other stops when
+  // it started. Nothing in Recently deleted runs; it stops when it was deleted.
+  let stopwatch = normalizeTrack(value.stopwatch, undefined, todayKey())
+  const latestStart = Math.max(runningSince(stopwatch) ?? -Infinity, ...tasks.map((task) => runningSince(task.time) ?? -Infinity))
+  const settle = (track: TimeTrack) => {
+    const since = runningSince(track)
+    return since !== null && since < latestStart ? pauseTrack(track, latestStart) : track
+  }
+  stopwatch = settle(stopwatch)
+  const runningTasks = tasks.filter((task) => runningSince(task.time) === latestStart)
+  const settledTasks = tasks.map((task) => task === runningTasks[0] ? task : { ...task, time: runningTasks.includes(task) ? pauseTrack(task.time, latestStart) : settle(task.time) })
+  if (isRunning(stopwatch) && runningTasks.length > 0) stopwatch = pauseTrack(stopwatch, latestStart)
+  const settledTrash = trash.map((entry) => isRunning(entry.task.time) ? { ...entry, task: { ...entry.task, time: pauseTrack(entry.task.time, new Date(entry.deletedAt).getTime()) } } : entry)
+
   const defaults = createDefaultPreferences()
   const preferences = isRecord(value.preferences) ? value.preferences : {}
   return {
     version: 1,
     lists,
-    tasks,
-    trash,
+    tasks: settledTasks,
+    trash: settledTrash,
+    stopwatch,
     preferences: {
       theme: oneOf(themes, preferences.theme, defaults.theme),
       sortMode: oneOf(sortModes, preferences.sortMode, defaults.sortMode),
@@ -227,6 +245,7 @@ function normalizeTask(candidate: Record<string, unknown>, listId: string | null
     createdAt: validIso(candidate.createdAt) || now,
     sortOrder: finiteNumber(candidate.sortOrder, index),
     subtasks: normalizeSubtasks(candidate.subtasks),
+    time: normalizeTrack(candidate.time, candidate.timeSpentMinutes, legacyTimeDay(focusDates, candidate, now)),
   }
 }
 
@@ -257,6 +276,47 @@ function normalizeFocusOrder(value: unknown): Record<string, number> {
     if (DAY_KEY_PATTERN.test(day) && typeof order === 'number' && Number.isFinite(order)) result[day] = order
   }
   return result
+}
+
+// The day time saved as plain minutes most likely belongs to: the task's latest planned day up to
+// today, else the day it was finished or created. Never a future day.
+function legacyTimeDay(focusDates: string[], candidate: Record<string, unknown>, now: string) {
+  const today = dayKeyOf(new Date(now))
+  const planned = focusDates.filter((day) => day <= today).sort().pop()
+  if (planned) return planned
+  const stamp = nullableIso(candidate.completedAt) || nullableIso(candidate.createdAt)
+  const day = stamp ? dayKeyOf(new Date(stamp)) : today
+  return day <= today ? day : today
+}
+
+// Sessions need a valid start and a valid or open end; only the latest may be open. Data saved
+// before stopwatches existed carried whole minutes, which go on `legacyDay`.
+function normalizeTrack(value: unknown, legacyMinutes: unknown, legacyDay: string): TimeTrack {
+  const track = emptyTrack()
+  if (!isRecord(value)) {
+    if (typeof legacyMinutes === 'number' && Number.isFinite(legacyMinutes) && legacyMinutes > 0) {
+      track.adjustments[legacyDay] = Math.round(legacyMinutes) * 60
+    }
+    return track
+  }
+  const sessions: TimeSession[] = []
+  for (const item of Array.isArray(value.sessions) ? value.sessions : []) {
+    if (!isRecord(item)) continue
+    const start = validIso(item.start)
+    if (!start) continue
+    const end = item.end === null ? null : validIso(item.end)
+    if (item.end !== null && !end) continue
+    if (end && new Date(end).getTime() < new Date(start).getTime()) continue
+    sessions.push({ start, end })
+  }
+  sessions.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+  track.sessions = sessions.filter((session, index) => session.end !== null || index === sessions.length - 1)
+  if (isRecord(value.adjustments)) {
+    for (const [day, seconds] of Object.entries(value.adjustments)) {
+      if (DAY_KEY_PATTERN.test(day) && typeof seconds === 'number' && Number.isFinite(seconds) && seconds !== 0) track.adjustments[day] = seconds
+    }
+  }
+  return track
 }
 
 function normalizeSubtasks(value: unknown): Subtask[] {

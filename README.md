@@ -36,7 +36,8 @@ Download the newest `.dmg` from the [releases page](https://github.com/Adrish7/K
 
 - Lists with a colour each, and an All tasks board showing every list side by side
 - Today, Calendar, Starred, Completed, and Recently deleted views
-- Notes, subtasks, due date and time, reminders, and recurrence
+- Notes, subtasks, due date and time, reminders, recurrence, and time spent
+- A stopwatch for any task, plus an open stopwatch, with a day timeline of your sessions and per-day totals in the calendar
 - Drag to reorder tasks; manual, due-date, or starred-first sorting
 - Native macOS notifications and a Dock badge
 - Dark by default, with light and follow-the-Mac options

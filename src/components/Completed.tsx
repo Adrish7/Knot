@@ -1,5 +1,6 @@
 import { CheckCircle2, Clock3, RotateCcw, Trash2 } from 'lucide-react'
 import { timeAgo } from '../format'
+import { TimeSpentPicker } from './TimeSpentPicker'
 import type { Task, TaskList } from '../types'
 
 interface CompletedProps {
@@ -8,10 +9,12 @@ interface CompletedProps {
   onOpen: (taskId: string) => void
   onReopen: (taskId: string) => void
   onDelete: (taskId: string) => void
+  onSetTimeSpent: (taskId: string, seconds: number) => void
+  onStopwatch: (taskId: string) => void
   onClear: () => void
 }
 
-export function Completed({ tasks, lists, onOpen, onReopen, onDelete, onClear }: CompletedProps) {
+export function Completed({ tasks, lists, onOpen, onReopen, onDelete, onSetTimeSpent, onStopwatch, onClear }: CompletedProps) {
   const sorted = [...tasks].sort((a, b) => completedTime(b) - completedTime(a))
 
   return (
@@ -45,6 +48,7 @@ export function Completed({ tasks, lists, onOpen, onReopen, onDelete, onClear }:
                     <span><Clock3 size={12} />{timeAgo(task.completedAt, 'Completed')}</span>
                   </span>
                 </div>
+                <TimeSpentPicker variant="archive" track={task.time} taskTitle={task.title} onChange={(minutes) => onSetTimeSpent(task.id, minutes)} onStopwatch={() => onStopwatch(task.id)} />
                 <button className="archive-action" onClick={() => onReopen(task.id)} title="Move back to its list"><RotateCcw size={15} />Reopen</button>
                 <button className="archive-action danger" onClick={() => onDelete(task.id)} aria-label={`Delete ${task.title}`} title="Delete task"><Trash2 size={15} /></button>
               </article>

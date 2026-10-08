@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('knot', {
   snapshotBeforeImport: () => ipcRenderer.invoke('knot:snapshot-before-import'),
   setTheme: (theme) => ipcRenderer.invoke('knot:set-theme', theme),
   setLaunchAtLogin: (enabled) => ipcRenderer.invoke('knot:set-launch-at-login', enabled),
+  keepAwake: (enabled) => ipcRenderer.invoke('knot:keep-awake', enabled),
 })

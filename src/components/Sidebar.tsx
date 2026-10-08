@@ -1,13 +1,16 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, Download, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Trash2, Upload, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, Download, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Timer, Trash2, Upload, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { isForToday } from '../format'
-import type { Task, TaskList, ThemeMode, ViewId } from '../types'
+import { isForToday, todayKey } from '../format'
+import { daySeconds, formatClock, formatSpent, isRunning, totalSeconds } from '../time'
+import { useNow } from '../useNow'
+import type { Task, TaskList, ThemeMode, TimeTrack, ViewId } from '../types'
 import { ListRing, listProgress } from './ListRing'
 
 interface SidebarProps {
   collapsed: boolean
   lists: TaskList[]
   tasks: Task[]
+  stopwatch: TimeTrack
   selectedView: ViewId
   completedCount: number
   trashCount: number
@@ -27,7 +30,7 @@ interface SidebarProps {
   onImport?: () => void
 }
 
-export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport }: SidebarProps) {
+export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport }: SidebarProps) {
   const [editingListId, setEditingListId] = useState<string | null>(null)
   const [draftListName, setDraftListName] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -55,6 +58,17 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
   const openTasks = tasks.filter((task) => task.listId !== null && !task.completed)
   const todayCount = openTasks.filter(isForToday).length
   const starredCount = openTasks.filter((task) => task.starred).length
+  // Time logged today (the day turns over at 6 AM) on every task still in the app, open or
+  // completed, plus the open stopwatch; deleted tasks do not count. Ticks while anything runs.
+  const runningTrack = tasks.find((task) => isRunning(task.time))?.time ?? (isRunning(stopwatch) ? stopwatch : null)
+  const now = useNow(runningTrack !== null)
+  const today = todayKey()
+  const timedToday = tasks.filter((task) => daySeconds(task.time, today, now) >= 1)
+  const todayLabel = formatSpent(timedToday.reduce((sum, task) => sum + daySeconds(task.time, today, now), 0) + daySeconds(stopwatch, today, now))
+  const allTimeLabel = formatSpent(tasks.reduce((sum, task) => sum + totalSeconds(task.time, now), 0) + totalSeconds(stopwatch, now))
+  const todayHint = timedToday.length === 0
+    ? 'Time spent today'
+    : `Time spent today across ${timedToday.length} ${timedToday.length === 1 ? 'task' : 'tasks'}`
 
   return (
     <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''}`}>
@@ -75,6 +89,7 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
         <SidebarLink collapsed={collapsed} active={selectedView === 'today'} color="var(--c-today)" icon={<Sun />} label="Today" count={todayCount} onClick={() => onSelect('today')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'calendar'} color="var(--c-calendar)" icon={<CalendarDays />} label="Calendar" count={0} onClick={() => onSelect('calendar')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'starred'} color="var(--c-starred)" icon={<Star fill="currentColor" />} label="Starred" count={starredCount} onClick={() => onSelect('starred')} />
+        <SidebarLink collapsed={collapsed} active={selectedView === 'stopwatch'} color="var(--c-timer)" icon={<Timer />} label="Stopwatch" count={runningTrack ? <span className="nav-live"><span className="run-dot" aria-hidden="true" />{formatClock(totalSeconds(runningTrack, now))}</span> : 0} onClick={() => onSelect('stopwatch')} />
       </nav>
       <nav className="secondary-nav" aria-label="Archive">
         <SidebarLink collapsed={collapsed} active={selectedView === 'completed'} color="var(--c-done)" icon={<CheckCircle2 />} label="Completed" count={completedCount} onClick={() => onSelect('completed')} />
@@ -134,6 +149,11 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
 
       <div className="sidebar-divider" />
 
+      <button className="sidebar-total" onClick={() => onSelect('stopwatch')} title={`${todayHint}: ${todayLabel}. All time: ${allTimeLabel}. Opens the stopwatch.`} aria-label={`Time today: ${todayLabel}. Open the stopwatch`}>
+        <Timer />
+        {!collapsed && <><span>Time today</span><span className="nav-count">{todayLabel}</span></>}
+      </button>
+
       <div className="sidebar-footer" ref={footerRef}>
         <button className="new-list-button" onClick={onCreateList} title="New list"><Plus size={16} />{!collapsed && <span>New list</span>}</button>
         <button className={`icon-button settings-button ${settingsOpen ? 'is-open' : ''}`} onClick={() => setSettingsOpen((open) => !open)} aria-label="Settings" aria-expanded={settingsOpen} aria-haspopup="dialog" title="Settings"><Settings2 size={16} /></button>
@@ -174,7 +194,7 @@ export function Sidebar({ collapsed, lists, tasks, selectedView, completedCount,
   )
 }
 
-function SidebarLink({ collapsed, active, color, icon, label, count, onClick }: { collapsed: boolean; active: boolean; color: string; icon: React.ReactNode; label: string; count: number; onClick: () => void }) {
+function SidebarLink({ collapsed, active, color, icon, label, count, onClick }: { collapsed: boolean; active: boolean; color: string; icon: React.ReactNode; label: string; count: React.ReactNode; onClick: () => void }) {
   return (
     <button className={`sidebar-link ${active ? 'active' : ''}`} style={{ '--view-color': color } as React.CSSProperties} onClick={onClick} title={collapsed ? label : undefined} aria-current={active ? 'page' : undefined}>
       {icon}

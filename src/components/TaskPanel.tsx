@@ -1,8 +1,10 @@
-import { Bell, CalendarClock, CalendarDays, Check, ChevronDown, Clock3, ListChecks, Plus, Repeat2, Star, Trash2, X } from 'lucide-react'
-import { useState } from 'react'
+import { Bell, CalendarClock, CalendarDays, Check, ChevronDown, Clock3, ListChecks, Play, Plus, Repeat2, Star, Timer, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { uid } from '../data'
 import { completedSubtasks, formatDayKey } from '../format'
+import { isRunning } from '../time'
 import { DateTimePicker, FocusDayPicker } from './DateTimePicker'
+import { TimeSpentPicker } from './TimeSpentPicker'
 import type { Recurrence, Task, TaskList } from '../types'
 
 interface TaskPanelProps {
@@ -11,11 +13,21 @@ interface TaskPanelProps {
   onUpdate: (patch: Partial<Task>) => void
   onComplete: (completed: boolean) => void
   onDelete: () => void
+  onStopwatch: () => void
+  onSetTimeSpent: (seconds: number) => void
   onClose: () => void
 }
 
-export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onClose }: TaskPanelProps) {
+export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onStopwatch, onSetTimeSpent, onClose }: TaskPanelProps) {
   const [newSubtask, setNewSubtask] = useState('')
+
+  // Closing the panel (Escape, the scrim, another task) skips the title's blur, so a title left
+  // empty is filled in when the panel lets go of the task.
+  const latest = useRef({ title: task.title, onUpdate })
+  useEffect(() => { latest.current = { title: task.title, onUpdate } })
+  useEffect(() => () => {
+    if (!latest.current.title.trim()) latest.current.onUpdate({ title: 'Untitled task' })
+  }, [task.id])
   const listColor = lists.find((list) => list.id === task.listId)?.color
 
   const addSubtask = () => {
@@ -67,6 +79,15 @@ export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onClose
           <div className="detail-row">
             <span><Bell size={16} />Remind me</span>
             <DateTimePicker value={task.reminderAt} placeholder="Add a reminder" onChange={(reminderAt) => onUpdate({ reminderAt })} />
+          </div>
+          <div className="detail-row">
+            <span><Timer size={16} />Time spent</span>
+            <div className="detail-inline">
+              <TimeSpentPicker variant="field" track={task.time} onChange={onSetTimeSpent} />
+              <button type="button" className={`panel-stopwatch ${isRunning(task.time) ? 'is-running' : ''}`} onClick={onStopwatch} title={isRunning(task.time) ? 'Open the running stopwatch' : 'Start a stopwatch for this task'}>
+                {isRunning(task.time) ? <span className="run-dot" aria-hidden="true" /> : <Play size={12} strokeWidth={2.5} />}{isRunning(task.time) ? 'Stopwatch' : 'Start stopwatch'}
+              </button>
+            </div>
           </div>
           <label className="detail-row">
             <span><Repeat2 size={16} />Repeat</span>

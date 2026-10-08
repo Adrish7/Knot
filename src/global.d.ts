@@ -11,6 +11,7 @@ declare global {
       snapshotBeforeImport: () => Promise<boolean>
       setTheme: (theme: ThemeMode) => Promise<boolean>
       setLaunchAtLogin: (enabled: boolean) => Promise<boolean>
+      keepAwake?: (enabled: boolean) => Promise<boolean>
     }
   }
 }

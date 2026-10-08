@@ -2,7 +2,7 @@ export type ThemeMode = 'light' | 'dark' | 'system'
 export type Recurrence = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly'
 export type SortMode = 'manual' | 'date' | 'starred'
 export type FocusStatus = 'done' | 'missed'
-export type ViewId = 'all' | 'today' | 'calendar' | 'starred' | 'completed' | 'trash' | `list:${string}`
+export type ViewId = 'all' | 'today' | 'calendar' | 'starred' | 'stopwatch' | 'completed' | 'trash' | `list:${string}`
 
 export interface TaskList {
   id: string
@@ -16,6 +16,16 @@ export interface Subtask {
   id: string
   title: string
   completed: boolean
+}
+
+export interface TimeSession {
+  start: string // ISO
+  end: string | null // null while the stopwatch is running
+}
+
+export interface TimeTrack {
+  sessions: TimeSession[] // stopwatch runs, oldest first; only the last may be open
+  adjustments: Record<string, number> // day key -> seconds added (or removed) by hand that day
 }
 
 export interface Task {
@@ -36,6 +46,7 @@ export interface Task {
   createdAt: string
   sortOrder: number
   subtasks: Subtask[]
+  time: TimeTrack // time spent on the task, whatever its state
 }
 
 export interface DeletedTask {
@@ -56,5 +67,6 @@ export interface KnotData {
   lists: TaskList[]
   tasks: Task[]
   trash: DeletedTask[]
+  stopwatch: TimeTrack // the open stopwatch, not tied to any task
   preferences: Preferences
 }

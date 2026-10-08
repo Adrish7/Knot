@@ -15,8 +15,8 @@ Personal task manager for macOS. Electron + React + TypeScript, packaged as `/Ap
 ## Capabilities (keep every one)
 
 - Lists: create, rename, delete, reorder (drag on the board), color per list.
-- Views: All tasks (board of list columns), Today, Calendar (month, week, day, year; task tray; drag to plan), Starred, per-list, Completed, Recently deleted, search.
-- Tasks: create (inline quick add, ⌘N), edit title in place (double-click), notes, subtasks (inline toggles and editor), due date/time, focus days, reminder, recurrence, star, complete with animation, delete to trash, restore, purge, reorder by drag, move between lists.
+- Views: All tasks (board of list columns), Today, Calendar (month, week, day, year; task tray; drag to plan; Shift-click to select several chips and drag them together; ⌥-drag copies as new, separate tasks), Starred, per-list, Completed, Recently deleted, search.
+- Tasks: create (inline quick add, ⌘N), edit title in place (double-click), notes, subtasks (inline toggles and editor), due date/time, focus days, reminder, recurrence, time spent (hours and minutes logged from any row, chip or the panel, shown next to the task, with today's total across all tasks at the foot of the sidebar), a stopwatch per task (Stopwatch page: start, pause, resume, reset, adjust; one runs at a time; sessions are kept per day and drawn on a day timeline; an open stopwatch not tied to a task can be moved onto one; the calendar shows each day's total and, in day view, a per-task breakdown; a day runs from 6 AM to 6 AM, so late-night work counts toward the evening before), star, complete with animation, delete to trash, restore, purge, reorder by drag, move between lists.
 - Sorting: manual, due date, starred first.
 - Theme: light, dark, follow system.
 - Native: macOS notifications, Dock badge, open at login, JSON persistence with backup, single instance, wake-to-front, in-app "Update Knot" that rebuilds from source.

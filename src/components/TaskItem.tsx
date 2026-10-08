@@ -2,6 +2,8 @@ import { Bell, Calendar, CalendarDays, Check, ChevronDown, ChevronRight, GripVer
 import { useEffect, useRef, useState } from 'react'
 import { completedSubtasks, formatDayKey, formatDue, isOverdue, isToday, todayKey } from '../format'
 import { DateTimePicker } from './DateTimePicker'
+import { TimeSpentPicker } from './TimeSpentPicker'
+import { hasTime } from '../time'
 import type { Task } from '../types'
 
 export type DropEdge = 'before' | 'after'
@@ -16,13 +18,15 @@ interface TaskItemProps {
   onStar: (taskId: string) => void
   onDelete: (taskId: string) => void
   onSetDue?: (taskId: string, dueAt: string | null) => void
+  onSetTimeSpent?: (taskId: string, seconds: number) => void
+  onStopwatch?: (taskId: string) => void
   onRename?: (taskId: string, title: string) => void
   onDragStart?: (event: React.DragEvent, taskId: string) => void
   onDragEnd?: () => void
   dropEdge?: DropEdge | null
 }
 
-export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggleSubtask, onStar, onDelete, onSetDue, onRename, onDragStart, onDragEnd, dropEdge }: TaskItemProps) {
+export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggleSubtask, onStar, onDelete, onSetDue, onSetTimeSpent, onStopwatch, onRename, onDragStart, onDragEnd, dropEdge }: TaskItemProps) {
   const subtaskCount = task.subtasks.length
   const [editingTitle, setEditingTitle] = useState(false)
   const [draftTitle, setDraftTitle] = useState('')
@@ -154,6 +158,7 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
               </span>
             )}
             {task.reminderAt && <span title="Reminder set"><Bell size={12} /></span>}
+            {hasTime(task.time) && onSetTimeSpent && <TimeSpentPicker variant="meta" track={task.time} taskTitle={task.title} onChange={(minutes) => onSetTimeSpent(task.id, minutes)} onStopwatch={onStopwatch ? () => onStopwatch(task.id) : undefined} />}
             {task.recurrence !== 'none' && <span title={`Repeats ${task.recurrence}`}><Repeat2 size={12} />{task.recurrence}</span>}
             {subtaskCount > 0 && (
               <button
@@ -189,6 +194,9 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
       <div className="task-actions">
         {onSetDue && !task.completed && (
           <DateTimePicker iconTrigger value={task.dueAt} placeholder="Set a due date" onChange={(dueAt) => onSetDue(task.id, dueAt)} />
+        )}
+        {onSetTimeSpent && (
+          <TimeSpentPicker variant="icon" track={task.time} taskTitle={task.title} onChange={(minutes) => onSetTimeSpent(task.id, minutes)} onStopwatch={onStopwatch ? () => onStopwatch(task.id) : undefined} />
         )}
         <button className={`star-button ${task.starred ? 'is-starred' : ''}`} onClick={(event) => { event.stopPropagation(); onStar(task.id) }} aria-label={task.starred ? 'Remove star' : 'Star task'} title={task.starred ? 'Remove star' : 'Star'}>
           <Star size={15} fill={task.starred ? 'currentColor' : 'none'} />

@@ -12,7 +12,7 @@ Operate. Scanability and native expectations outrank expression. Brand lives in 
 
 ## Palette
 
-Neutral ground, one accent, six named view colors, a twelve-color list palette.
+Neutral ground, one accent, seven named view colors, a twelve-color list palette.
 
 | Role | Light | Dark |
 |---|---|---|
@@ -29,6 +29,7 @@ Neutral ground, one accent, six named view colors, a twelve-color list palette.
 | Starred | `#8b5cf6` | `#a78bfa` |
 | Completed | `#2aa04f` | `#3fca6a` |
 | Recently deleted | `#8e8e93` | `#98989f` |
+| Stopwatch | `#0f9d8f` | `#2dd4bf` |
 | Danger | `#e5484d` | `#ff6369` |
 
 List palette (user-chosen, stored as hex): red `#e5484d`, orange `#f76b15`, amber `#e0a100`, green `#30a46c`, teal `#12a594`, cyan `#0c9cc4`, blue `#3b82f6`, indigo `#5b5bd6`, violet `#8e4ec6`, pink `#d6409f`, brown `#a07553`, slate `#64748b`.
@@ -62,4 +63,4 @@ Radii: 5px controls and checkboxes, 7px rows, 10px popovers and menus, 12px pane
 
 ## Motion
 
-One authored moment: completing a task (check pop, strike, row collapse). Everything else is 150–220ms state feedback with `cubic-bezier(.2,.8,.2,1)`. Reduced motion collapses all to 1ms.
+Two authored moments: completing a task (check pop, strike, row collapse) and the stopwatch face (hour ring sweep, seconds comet, breathing while running, hour rollover). Everything else is 150–220ms state feedback with `cubic-bezier(.2,.8,.2,1)`. Reduced motion collapses all to 1ms.
