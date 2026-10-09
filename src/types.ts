@@ -48,6 +48,7 @@ export interface Task {
   focusStatus: Record<string, FocusStatus> // day key -> outcome for that focus day
   focusOrder: Record<string, number> // day key -> position among that day's tasks (unset = original order, after ordered ones); also the Today page order
   starredOrder: number | null // position on the Starred page (null = original order, after ordered ones)
+  stopwatchOrder: number | null // position in the Stopwatch page's Today list (null = order added, after ordered ones)
   reminderAt: string | null
   recurrence: Recurrence
   starred: boolean

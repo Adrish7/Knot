@@ -1,10 +1,11 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, Download, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Timer, Trash2, Upload, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, CircleArrowDown, Download, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Timer, Trash2, Upload, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { isForToday, todayKey } from '../format'
 import { dayBalance, isBreakTask } from '../tags'
 import { formatClock, formatSpent, isRunning, totalSeconds } from '../time'
 import { useNow } from '../useNow'
 import type { Task, TaskList, ThemeMode, TimeTrack, ViewId } from '../types'
+import type { UpdateApi } from '../useUpdate'
 import { ListRing, listProgress } from './ListRing'
 import { useTags } from './Tags'
 
@@ -30,9 +31,10 @@ interface SidebarProps {
   onTheme: (theme: ThemeMode) => void
   onExport?: () => void
   onImport?: () => void
+  updates: UpdateApi
 }
 
-export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport }: SidebarProps) {
+export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport, updates }: SidebarProps) {
   const [editingListId, setEditingListId] = useState<string | null>(null)
   const [draftListName, setDraftListName] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -155,6 +157,8 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
         {!collapsed && <><span>Time today</span><span className="nav-count">{todayLabel}</span></>}
       </button>
 
+      {updates.update && <UpdateButton collapsed={collapsed} updates={updates} />}
+
       <div className="sidebar-footer" ref={footerRef}>
         <button className="new-list-button" onClick={onCreateList} title="New list"><Plus size={16} />{!collapsed && <span>New list</span>}</button>
         <button className={`icon-button settings-button ${settingsOpen ? 'is-open' : ''}`} onClick={() => setSettingsOpen((open) => !open)} aria-label="Settings" aria-expanded={settingsOpen} aria-haspopup="dialog" title="Settings"><Settings2 size={16} /></button>
@@ -188,10 +192,44 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
               <span><span>Search</span><b><kbd>⌘</kbd><kbd>K</kbd></b></span>
               <span><span>New task</span><b><kbd>⌘</kbd><kbd>N</kbd></b></span>
             </div>
+            {updates.supported && <>
+              <div className="settings-divider" />
+              <div className="settings-version">
+                <span>{updates.version ? `Knot ${updates.version}` : 'Knot'}</span>
+                {updates.update
+                  ? <button onClick={updates.install} disabled={Boolean(updates.progress)}>Update to {updates.update.version}</button>
+                  : <button onClick={updates.checkNow} disabled={updates.checking}>{updates.checking ? 'Checking…' : 'Check for updates'}</button>}
+              </div>
+            </>}
           </div>
         )}
       </div>
     </aside>
+  )
+}
+
+// Shown above the footer once GitHub has a newer release. One click downloads it, installs it
+// over this copy and restarts; the row fills as the download progresses.
+function UpdateButton({ collapsed, updates }: { collapsed: boolean; updates: UpdateApi }) {
+  const { update, progress } = updates
+  if (!update) return null
+  const label = !progress ? 'Update Knot'
+    : progress.phase === 'downloading' ? 'Downloading update'
+    : progress.phase === 'installing' ? 'Installing update'
+    : 'Restarting…'
+  const detail = !progress ? update.version : progress.phase === 'downloading' ? `${Math.round(progress.fraction * 100)}%` : ''
+  return (
+    <button
+      className={`sidebar-update ${progress ? 'is-busy' : ''}`}
+      style={{ '--progress': `${Math.round((progress?.fraction ?? 0) * 100)}%` } as React.CSSProperties}
+      onClick={updates.install}
+      disabled={Boolean(progress)}
+      title={progress ? label : `Knot ${update.version} is available. Download it, install it and restart Knot.`}
+      aria-label={progress ? `${label} ${detail}`.trim() : `Update Knot to ${update.version} and restart`}
+    >
+      <CircleArrowDown />
+      {!collapsed && <><span>{label}</span><span className="nav-count">{detail}</span></>}
+    </button>
   )
 }
 

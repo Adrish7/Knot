@@ -74,6 +74,10 @@ export function sortStarred(tasks: Task[]) {
   return sortByPosition(tasks, (task) => task.starredOrder)
 }
 
+export function sortStopwatch(tasks: Task[]) {
+  return sortByPosition(tasks, (task) => task.stopwatchOrder)
+}
+
 // Soonest due date first; tasks without one follow in their manual order.
 export function compareByDue(a: Task, b: Task) {
   if (!a.dueAt && !b.dueAt) return a.sortOrder - b.sortOrder
@@ -93,6 +97,7 @@ export function createTask(listId: string | null, title: string, sortOrder: numb
     focusStatus: {},
     focusOrder: {},
     starredOrder: null,
+    stopwatchOrder: null,
     reminderAt: null,
     recurrence: 'none',
     starred: false,
@@ -279,6 +284,7 @@ function normalizeTask(candidate: Record<string, unknown>, listId: string | null
     focusStatus: normalizeFocusStatus(candidate.focusStatus, focusDates),
     focusOrder: normalizeFocusOrder(candidate.focusOrder),
     starredOrder: typeof candidate.starredOrder === 'number' && Number.isFinite(candidate.starredOrder) ? candidate.starredOrder : null,
+    stopwatchOrder: typeof candidate.stopwatchOrder === 'number' && Number.isFinite(candidate.stopwatchOrder) ? candidate.stopwatchOrder : null,
     reminderAt: nullableIso(candidate.reminderAt),
     recurrence: oneOf(recurrences, candidate.recurrence, 'none'),
     starred: Boolean(candidate.starred),

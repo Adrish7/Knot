@@ -1,6 +1,6 @@
 # Knot
 
-Knot is a calm, native-feeling task manager for macOS. Lists, a Today view, a calendar, starred tasks, reminders, and recurring tasks, all stored locally on your Mac.
+Knot is a calm, native-feeling task manager for macOS. Lists, a Today view, a calendar, starred tasks, reminders, recurring tasks, and a stopwatch for tracking your time, all stored locally on your Mac.
 
 ## Download
 
@@ -30,7 +30,13 @@ xattr -dr com.apple.quarantine /Applications/Knot.app
 
 ### Updating
 
-Download the newest `.dmg` from the [releases page](https://github.com/Adrish7/Knot/releases) and drag Knot into Applications again, replacing the old copy. Your tasks are kept; they live in your Application Support folder, not inside the app.
+Knot 1.4.0 and later check for a new release when they open and every few hours. When one is out, an **Update Knot** button appears at the bottom of the sidebar. Click it and Knot downloads the new version, replaces itself and restarts. To check by hand, open Settings (the gear at the bottom of the sidebar) and click **Check for updates**.
+
+If Knot can't replace itself, for example because it isn't in your Applications folder, it opens the new disk image instead. Quit Knot and drag the new copy into Applications.
+
+Versions before 1.4.0 have no update button. Update those once by hand: download the newest `.dmg` from the link above and drag Knot into Applications, replacing the old copy.
+
+Your tasks are kept either way. They live in your Application Support folder, not inside the app.
 
 ## Features
 
@@ -38,6 +44,8 @@ Download the newest `.dmg` from the [releases page](https://github.com/Adrish7/K
 - Today, Calendar, Starred, Completed, and Recently deleted views
 - Notes, subtasks, due date and time, reminders, recurrence, and time spent
 - A stopwatch for any task, plus an open stopwatch, with a day timeline of your sessions and per-day totals in the calendar
+- Tags such as Productive, Break and Relaxing, with time on break-tagged tasks counted as breaks rather than work
+- Mark tasks done for the day from the stopwatch's Today list, and drag that list into any order
 - Drag to reorder tasks; manual, due-date, or starred-first sorting
 - Native macOS notifications and a Dock badge
 - Dark by default, with light and follow-the-Mac options
@@ -45,6 +53,7 @@ Download the newest `.dmg` from the [releases page](https://github.com/Adrish7/K
 - Keyboard shortcuts: `⌘K` to search, `⌘N` for a new task
 - Data saved as JSON in `~/Library/Application Support/Knot`, with a backup of the previous save and a daily copy for the last 7 days in the `Backups` folder
 - Export and import your data from Settings, for example to move to a new Mac
+- Updates itself from GitHub Releases with one click. The update check is the only thing Knot sends over the network.
 
 ## Build from source
 
@@ -62,7 +71,9 @@ npm run dist       # builds release/Knot-mac-arm64.dmg
 
 ## Releasing
 
-Pushing a tag like `v1.2.0` runs the GitHub Actions workflow in `.github/workflows/release.yml`, which builds the DMG and attaches it to a GitHub Release for that tag. Bump `version` in `package.json` to match before tagging. The README download link points at the latest release, so it never needs editing.
+Pushing a tag like `v1.4.0` runs the GitHub Actions workflow in `.github/workflows/release.yml`, which builds the DMG and attaches it to a GitHub Release for that tag. Bump `version` in `package.json` to match before tagging. The README download link points at the latest release, so it never needs editing.
+
+The in-app updater (`electron/updater.cjs`) reads the latest release from the GitHub API. A release is offered to users once it has a `Knot-mac-arm64.dmg` attached and its tag (`vX.Y.Z`) is newer than their version. Drafts and pre-releases are never offered.
 
 `npm run downloads` prints how many times each release has been downloaded.
 

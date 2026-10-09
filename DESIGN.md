@@ -52,7 +52,7 @@ Radii: 5px controls and checkboxes, 7px rows, 10px popovers and menus, 12px pane
 
 ## Components
 
-- **Sidebar**: 244px, vibrancy, traffic-light space, search field on top, view rows with colored icons, list rows with a progress ring in the list color, Completed and Recently deleted after a hairline, footer with "New list" and a settings gear that opens a popover (appearance, open at login, export and import, shortcuts). Collapsed rail at 76px keeps icons and rings.
+- **Sidebar**: 244px, vibrancy, traffic-light space, search field on top, view rows with colored icons, list rows with a progress ring in the list color, Completed and Recently deleted after a hairline, footer with "New list" and a settings gear that opens a popover (appearance, open at login, export and import, shortcuts, version and "Check for updates"). When a newer release exists, an "Update Knot" row sits above the footer in `--accent` on `--accent-soft`, with the version at the right; while it downloads the row fills left to right. Collapsed rail at 76px keeps icons and rings.
 - **Page title**: colored view icon + 26px title. No eyebrow. Optional one-line subline (date, result count).
 - **Task row**: 16px rounded-square checkbox, 14px title, 12px meta line, hover actions at the right (date, star, delete), drop guide in accent.
 - **Board**: columns of 320px with heading (ring, name, count) over a hairline; no card chrome.

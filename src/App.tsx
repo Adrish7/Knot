@@ -14,6 +14,7 @@ import { Trash } from './components/Trash'
 import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sortFocusDay, sortStarred, uid } from './data'
 import { dateKey, dayKeyOf, isForToday, parseDateKey, todayDate, todayKey } from './format'
 import { useNow } from './useNow'
+import { useUpdate } from './useUpdate'
 import { dayBalance, sortTags } from './tags'
 import { emptyTrack, formatSpent, isRunning, mergeTracks, pauseTrack, setTotalSeconds, startTrack, totalSeconds } from './time'
 import type { DeletedTask, FocusStatus, KnotData, Tag, Task, TaskList, ThemeMode, TimeTrack, ViewId } from './types'
@@ -134,6 +135,7 @@ function App() {
     setToast(message)
     window.setTimeout(() => setToast((current) => current === message ? null : current), 2600)
   }
+  const updates = useUpdate(showToast)
 
   useEffect(() => {
     let active = true
@@ -540,6 +542,32 @@ function App() {
     }),
   }))
 
+  // The Stopwatch page's check: done for today, the same as ticking the task's chip on today in
+  // the calendar. A task timed today but not planned for today gets today as a focus day so the
+  // mark has a day to live on. Unticking a task completed elsewhere reopens it.
+  const setDoneToday = (taskId: string, done: boolean) => {
+    const today = todayKey()
+    const task = data.tasks.find((item) => item.id === taskId)
+    if (!task) return
+    if (!done && task.completed) completeTask(taskId, false)
+    setData((current) => ({
+      ...current,
+      tasks: current.tasks.map((item) => {
+        if (item.id !== taskId) return item
+        const { [today]: _removed, ...focusStatus } = item.focusStatus
+        if (!done) return { ...item, focusStatus }
+        const focusDates = item.focusDates.includes(today) ? item.focusDates : [...item.focusDates, today].sort()
+        return { ...item, focusDates, focusStatus: { ...focusStatus, [today]: 'done' }, time: pauseTrack(item.time) }
+      }),
+    }))
+  }
+
+  // The Stopwatch page's Today list hands back its rows in their new order.
+  const reorderStopwatch = (taskIds: string[]) => {
+    const orderOf = new Map(taskIds.map((id, position) => [id, position]))
+    setData((current) => ({ ...current, tasks: current.tasks.map((task) => { const position = orderOf.get(task.id); return position === undefined ? task : { ...task, stopwatchOrder: position } }) }))
+  }
+
   const addTaskOnDay = (day: string, title: string) => {
     const task = { ...createTask(null, title, 0), focusDates: [day] }
     setData((current) => ({ ...current, tasks: [...current.tasks, task] }))
@@ -569,7 +597,7 @@ function App() {
       const repeat = nextRepeat(source, !completed && source.completedAt ? new Date(source.completedAt).getTime() : Date.now())
       const isNextCopy = (task: Task) => repeat !== null && task.id !== source.id && !task.completed && task.listId === source.listId && task.title === source.title && task.recurrence === source.recurrence && task.dueAt === repeat.dueAt && (repeat.dueAt !== null || task.focusDates.join() === repeat.focusDates.join())
       if (completed && !source.completed && repeat && !tasks.some(isNextCopy)) {
-        tasks.push({ ...source, ...repeat, id: uid('task'), focusStatus: {}, focusOrder: {}, starredOrder: null, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: endSortOrder(tasks, source.listId), subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })), time: emptyTrack() })
+        tasks.push({ ...source, ...repeat, id: uid('task'), focusStatus: {}, focusOrder: {}, starredOrder: null, stopwatchOrder: null, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: endSortOrder(tasks, source.listId), subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })), time: emptyTrack() })
       }
       // Reopening takes back the copy completing made, as long as nothing has been done with it.
       if (!completed && source.completed && repeat) {
@@ -822,6 +850,7 @@ function App() {
           onTheme={setTheme}
           onExport={window.knot ? exportData : undefined}
           onImport={window.knot ? importData : undefined}
+          updates={updates}
         />
         <section className="workspace">
           <Header
@@ -850,6 +879,8 @@ function App() {
               onOpenTask={setSelectedTaskId}
               onAddTask={addStopwatchTask}
               onSetTags={(taskId, tagIds) => updateTask(taskId, { tagIds })}
+              onSetDone={setDoneToday}
+              onReorder={reorderStopwatch}
             />
             : selectedView === 'calendar' && !searching ? <CalendarPage
               tasks={data.tasks}

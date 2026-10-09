@@ -1,6 +1,6 @@
 # Knot
 
-Personal task manager for macOS. Electron + React + TypeScript, packaged as `/Applications/Knot.app` and updated from this source folder.
+Personal task manager for macOS. Electron + React + TypeScript, packaged as `/Applications/Knot.app` and released as a DMG on GitHub Releases.
 
 ## Users
 
@@ -16,16 +16,16 @@ Personal task manager for macOS. Electron + React + TypeScript, packaged as `/Ap
 
 - Lists: create, rename, delete, reorder (drag on the board), color per list.
 - Views: All tasks (board of list columns), Today, Calendar (month, week, day, year; task tray; drag to plan; Shift-click to select several chips and drag them together; ⌥-drag copies as new, separate tasks), Starred, per-list, Completed, Recently deleted, search.
-- Tasks: create (inline quick add, ⌘N), edit title in place (double-click), notes, subtasks (inline toggles and editor), due date/time, focus days, reminder, recurrence, time spent (hours and minutes logged from any row, chip or the panel, shown next to the task, with today's total across all tasks at the foot of the sidebar), a stopwatch per task (Stopwatch page: start, pause, resume, reset, adjust; one runs at a time; sessions are kept per day and drawn on a day timeline; an open stopwatch not tied to a task can be moved onto one; the calendar shows each day's total and, in day view, a per-task breakdown; a day runs from 6 AM to 6 AM, so late-night work counts toward the evening before), star, complete with animation, delete to trash, restore, purge, reorder by drag, move between lists.
+- Tasks: create (inline quick add, ⌘N), edit title in place (double-click), notes, subtasks (inline toggles and editor), due date/time, focus days, reminder, recurrence, time spent (hours and minutes logged from any row, chip or the panel, shown next to the task, with today's total across all tasks at the foot of the sidebar), a stopwatch per task (Stopwatch page: start, pause, resume, reset, adjust; one runs at a time; sessions are kept per day and drawn on a day timeline; an open stopwatch not tied to a task can be moved onto one; the calendar shows each day's total and, in day view, a per-task breakdown; a day runs from 6 AM to 6 AM, so late-night work counts toward the evening before; the Stopwatch page's Today list keeps the order tasks were added in, can be dragged into any order, and can mark a task done for the day, the same mark as the calendar chip's), tags (Productive, Break, Relaxing and your own; break-tagged time counts as a break, like the gaps between sessions), star, complete with animation, delete to trash, restore, purge, reorder by drag, move between lists.
 - Sorting: manual, due date, starred first.
 - Theme: light, dark, follow system.
-- Native: macOS notifications, Dock badge, open at login, JSON persistence with backup, single instance, wake-to-front, in-app "Update Knot" that rebuilds from source.
+- Native: macOS notifications, Dock badge, open at login, JSON persistence with backup, single instance, wake-to-front, export and import, daily backups, and an "Update Knot" button in the sidebar when GitHub has a newer release (downloads the DMG, replaces the app, restarts).
 - Shortcuts: ⌘K search, ⌘N new task, Esc closes layers.
 
 ## Constraints
 
 - Functionality and state logic are frozen; UI files are the redesign surface.
-- No external network: CSP is `default-src 'self'`. Fonts must be system or bundled; nothing loads from the web.
+- No external network in the renderer: CSP is `default-src 'self'`. Fonts must be system or bundled; nothing loads from the web. The only request is the main process's update check against the GitHub Releases API.
 - Persisted data shape is versioned (`version: 1`) and normalized on load; list colors are stored as hex, so any palette change must keep older hex values rendering.
 - Copy stays plain and utilitarian. No slogans, no greetings, no poetic microcopy.
 - The dev Electron instance must not be launched for verification (it adds a second Dock icon). Verify with the web build in headless Chrome.

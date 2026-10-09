@@ -1,6 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, Menu, powerMonitor, powerSaveBlocker } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
+const { registerUpdater } = require('./updater.cjs')
 
 app.setName('Knot')
 if (!app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'Knot Development'))
@@ -325,6 +326,8 @@ ipcMain.handle('knot:set-theme', (_event, theme) => {
 })
 
 ipcMain.handle('knot:set-launch-at-login', (_event, enabled) => setLaunchAtLogin(enabled))
+
+registerUpdater()
 
 // While a stopwatch is on screen the display stays awake, so the time stays readable on a
 // second monitor during a long session.
