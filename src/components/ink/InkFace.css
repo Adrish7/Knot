@@ -1,0 +1,104 @@
+/* The Ink. A round basin of water: the canvas is the water, a bevelled rim frames it, the
+   readout rests on the calm centre. Light: ink in water on white porcelain. Dark: luminous dye
+   in black water. Only the rim and the marks are CSS; the water itself is WebGL. */
+
+.sw-ink {
+  --sw-face-size: clamp(300px, 64cqi, 460px);
+  --ink-ground: #f7f7f9;
+  --ink-rim: rgba(0, 0, 0, 0.1);
+  --ink-rim-shade: rgba(0, 0, 0, 0.1);
+  --ink-rim-light: rgba(255, 255, 255, 0.9);
+  position: relative;
+  width: min(100%, var(--sw-face-size));
+  aspect-ratio: 1;
+  container-type: inline-size;
+  user-select: none;
+  -webkit-user-select: none;
+}
+:root[data-theme='dark'] .sw-ink {
+  --ink-ground: #18181b;
+  --ink-rim: rgba(255, 255, 255, 0.08);
+  --ink-rim-shade: rgba(0, 0, 0, 0.55);
+  --ink-rim-light: rgba(255, 255, 255, 0.06);
+}
+@container sw (min-width: 940px) {
+  .sw-layout .sw-ink { --sw-face-size: clamp(300px, 40cqi, 460px); }
+}
+
+.sw-ink-probe { position: absolute; width: 0; height: 0; overflow: hidden; color: var(--face-color); }
+
+/* --- the water --------------------------------------------------------------------------- */
+.sw-ink-basin { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; background: var(--ink-ground); }
+.sw-ink-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+/* When WebGL is unavailable or lost: a still basin with a faint ring of the task colour. */
+.sw-ink-still { position: absolute; inset: 0; border-radius: 50%; opacity: 0; transition: opacity 240ms var(--ease); background:
+  radial-gradient(closest-side, transparent 82%, color-mix(in srgb, var(--face-color) 18%, transparent) 90%, transparent 97%),
+  radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.35), transparent 60%); }
+.sw-ink.is-fallback .sw-ink-canvas { visibility: hidden; }
+.sw-ink.is-fallback .sw-ink-still { opacity: 1; }
+
+/* A bevelled rim: a hairline, the wall under the light in shade, the far lip catching it. */
+.sw-ink-rim {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px var(--ink-rim),
+    inset 1.5px 2px 4px -1px var(--ink-rim-shade),
+    inset -1px -1px 1px var(--ink-rim-light);
+}
+
+/* --- the marks: minute arc, hour dots ---------------------------------------------------- */
+.sw-ink-marks { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.sw-ink-arc { fill: none; stroke: var(--face-color); stroke-width: 1.5; stroke-linecap: round; vector-effect: non-scaling-stroke; opacity: 0.42; transition: stroke-dasharray 600ms var(--ease), opacity 400ms var(--ease), stroke 400ms var(--ease); }
+.sw-ink-hour { r: 2.6px; fill: var(--face-color); opacity: 0.7; transition: fill 400ms var(--ease), opacity 400ms var(--ease); }
+.sw-ink.is-paused .sw-ink-arc { stroke: var(--text-3); opacity: 0.5; }
+.sw-ink.is-paused .sw-ink-hour { fill: var(--text-3); opacity: 0.5; }
+
+/* --- readout ----------------------------------------------------------------------------- */
+.sw-ink-readout { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 2px; text-align: center; pointer-events: none; }
+.sw-ink-readout > * { pointer-events: auto; }
+.sw-ink-state { display: inline-flex; align-items: center; gap: 6px; height: 16px; margin-bottom: 12px; color: var(--text-2); font-size: 12px; font-weight: 500; }
+.sw-ink-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--face-color); transition: background 200ms var(--ease), box-shadow 200ms var(--ease); }
+.sw-ink:not(.is-running) .sw-ink-state i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
+
+.sw-ink-digits { display: flex; align-items: baseline; color: var(--text); font-size: 14.6cqi; font-weight: 500; line-height: 1; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; white-space: nowrap; transition: color 220ms var(--ease); }
+.sw-ink-digits .is-sec { color: var(--text-2); }
+.sw-ink.is-idle .sw-ink-digits, .sw-ink.is-idle .sw-ink-digits .is-sec { color: var(--text-3); }
+
+/* A drum per digit: the old digit turns up and away over the top, the new one comes up from
+   below, foreshortened as if on a cylinder. */
+.sw-ink-drum {
+  position: relative;
+  display: inline-block;
+  clip-path: inset(0.08em 0 0.03em 0);
+  -webkit-mask: linear-gradient(transparent 8%, #000 16%, #000 90%, transparent 97%) no-repeat;
+  mask: linear-gradient(transparent 8%, #000 16%, #000 90%, transparent 97%) no-repeat;
+}
+.sw-ink-dg { display: inline-block; }
+.sw-ink-dg.is-out { position: absolute; left: 0; top: 0; animation: sw-ink-out-up 360ms cubic-bezier(0.3, 0.7, 0.3, 1) both; }
+.sw-ink-dg.is-in { animation: sw-ink-in-up 360ms cubic-bezier(0.3, 0.7, 0.3, 1) both; }
+.sw-ink-dg.is-out.is-down { animation-name: sw-ink-out-down; }
+.sw-ink-dg.is-in.is-down { animation-name: sw-ink-in-down; }
+@keyframes sw-ink-in-up { from { transform: translateY(0.92em) scaleY(0.55); } to { transform: none; } }
+@keyframes sw-ink-out-up { from { transform: none; } to { transform: translateY(-0.92em) scaleY(0.55); } }
+@keyframes sw-ink-in-down { from { transform: translateY(-0.92em) scaleY(0.55); } to { transform: none; } }
+@keyframes sw-ink-out-down { from { transform: none; } to { transform: translateY(0.92em) scaleY(0.55); } }
+
+.sw-ink-task { position: relative; display: inline-flex; align-items: center; gap: 5px; max-width: 64cqi; margin-top: 14px; padding: 3px 8px; border-radius: var(--r-control); color: var(--text); font-size: 14px; font-weight: 500; line-height: 20px; transition: background 120ms ease; }
+.sw-ink-task.has-control { padding-right: 6px; }
+.sw-ink-task.has-control:hover, .sw-ink-task.has-control:focus-within { background: var(--surface-2); }
+.sw-ink-task.has-control:has(select:focus-visible) { outline: 2px solid color-mix(in srgb, var(--face-color) 70%, transparent); outline-offset: 1px; }
+.sw-ink-task svg { color: var(--text-3); }
+.sw-ink-task-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-ink-task select { position: absolute; inset: 0; width: 100%; opacity: 0; }
+.sw-ink-list { display: inline-flex; align-items: center; gap: 6px; max-width: 64cqi; margin-top: 1px; color: var(--text-2); font-size: 12px; line-height: 16px; }
+.sw-ink-list i { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
+.sw-ink-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sw-ink-arc, .sw-ink-hour, .sw-ink-still { transition: none !important; }
+  .sw-ink-dg.is-in, .sw-ink-dg.is-out { animation: none !important; }
+  .sw-ink-dg.is-out { opacity: 0; }
+}

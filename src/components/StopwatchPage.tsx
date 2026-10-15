@@ -6,7 +6,7 @@ import { breakTagOf, dayBalance, isBreakTask } from '../tags'
 import { daySeconds, daySpans, formatClock, formatSpent, hasTime, isRunning, totalSeconds } from '../time'
 import { useNow } from '../useNow'
 import { DayTimeline, type TimelineSpan } from './DayTimeline'
-import { DialFace } from './DialFace'
+import { InkFace } from './ink/InkFace'
 import { QuickAdd } from './QuickAdd'
 import { TagPicker, tagsOf, useTags } from './Tags'
 import { TimeSpentPicker } from './TimeSpentPicker'
@@ -194,7 +194,7 @@ export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, o
     <main className="content-area focus-scroll stopwatch-page">
       <div className="sw-layout">
         <section className="sw-stage" style={{ '--face-color': color } as React.CSSProperties} aria-label="Stopwatch">
-          <DialFace
+          <InkFace
             elapsed={elapsed}
             running={running}
             color={color}
