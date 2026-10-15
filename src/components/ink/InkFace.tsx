@@ -131,7 +131,7 @@ export function InkFace({ elapsed, running, color, title, subtitle, subtitleColo
       </div>
       <div className="sw-ink-rim" aria-hidden="true" />
       <svg className="sw-ink-marks" viewBox="0 0 400 400" aria-hidden="true">
-        <circle className="sw-ink-arc" cx="200" cy="200" r="193" pathLength={60} transform="rotate(-90 200 200)" style={{ strokeDasharray: `${minutes} 60` }} />
+        <circle className={`sw-ink-arc${minutes === 0 ? ' is-empty' : ''}`} cx="200" cy="200" r="193" pathLength={60} transform="rotate(-90 200 200)" style={{ strokeDasharray: `${minutes} 60` }} />
         {hourDots(hours).map((dot, index) => <circle key={index} className="sw-ink-hour" cx={dot.x} cy={dot.y} />)}
       </svg>
       <div className="sw-ink-readout">

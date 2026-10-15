@@ -264,7 +264,7 @@ void main() {
   vec2 ruv = vUv + n.xy * uRefract;
   float dye = texture(uDye, ruv).r;
   float bloom = texture(uBloom, ruv).r;
-  float clearing = mix(uClear, 1.0, smoothstep(0.17, 0.31, r));
+  float clearing = mix(uClear, 1.0, smoothstep(0.21, 0.36, r));
   dye *= clearing * uAlive;
   bloom *= clearing * uAlive;
 

@@ -59,8 +59,8 @@ interface Look {
   sheen: number
 }
 
-const LIGHT: Look = { ground: [0.969, 0.969, 0.976], grey: [0.6, 0.6, 0.63], inkK: 3.4, bloom: 0, refract: 0.012, spec: 0.3, diffuse: 0.09, normal: 4.5, waveAmp: 1, pressAmp: 6, clear: 0.24, sheen: 0.025 }
-const DARK: Look = { ground: [0.094, 0.094, 0.106], grey: [0.52, 0.52, 0.55], inkK: 2.6, bloom: 0.75, refract: 0.012, spec: 0.55, diffuse: 0.12, normal: 4.5, waveAmp: 1, pressAmp: 6, clear: 0.26, sheen: 0.012 }
+const LIGHT: Look = { ground: [0.969, 0.969, 0.976], grey: [0.6, 0.6, 0.63], inkK: 3.4, bloom: 0, refract: 0.012, spec: 0.3, diffuse: 0.09, normal: 4.5, waveAmp: 1, pressAmp: 6, clear: 0.14, sheen: 0.025 }
+const DARK: Look = { ground: [0.094, 0.094, 0.106], grey: [0.52, 0.52, 0.55], inkK: 2.6, bloom: 0.75, refract: 0.012, spec: 0.4, diffuse: 0.12, normal: 4.5, waveAmp: 1, pressAmp: 6, clear: 0.16, sheen: 0.012 }
 
 interface Anchor { elapsed: number; at: number; running: boolean }
 interface Pulse { until: number; from: number; apply: (k: number) => void } // k = 1 → 0 over the pulse
@@ -375,7 +375,7 @@ export class InkController {
     if (!inside) return
     const gain = down ? 22 : 13
     const ink = Math.min(0.45, len * (down ? 22 : 12))
-    const ripple = Math.min(0.6, len * 18)
+    const ripple = Math.min(0.25, len * 8)
     this.inject((fluid) => {
       fluid.splatVelocity(x, y, dx * gain, dy * gain, down ? 0.05 : 0.04)
       fluid.splatDye(x, y, ink, down ? 0.014 : 0.011, 1.3)
