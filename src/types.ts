@@ -80,6 +80,7 @@ export interface SanctuaryState {
   spent: number // glimmers spent on keepsakes
   bestGrowth: number // high-water mark of lifetime growth, so clearing old tasks never shrinks it
   bestEarned: number // high-water mark of glimmers earned
+  rules: number // which earning rules the marks were made under; older marks are rebuilt
   tourSeen: string[] // walkthroughs already shown
 }
 

@@ -1,9 +1,10 @@
 /* ------------------------------------------------------------------
    Sanctuary: the tree hollow. One painted plate (night in dark, day in
    light) with everything else placed on it in plate coordinates; see
-   design/mockups/v3/HUD-NOTES.md. The numbers live on objects: an energy
-   plank under the lanterns, growth marks carved in the trunk, a chalk
-   slate for today, a jar for glimmers, keepsakes round the hollow.
+   design/mockups/v5/SPEC.md. Three figures, each on an object: today's
+   focus on a plank under the lanterns, the long run carved by the groove
+   in the trunk, the glimmer balance on the jar. Keepsakes round the hollow
+   are named only on hover. Hearth and Cinder answer a click.
 ------------------------------------------------------------------ */
 
 .sanctuary-page {
@@ -16,7 +17,7 @@
   --sanc-ease: cubic-bezier(.2, .8, .2, 1);
   --mx: 0; --my: 0;
 
-  /* by energy: lantern/ember glow, ember scale, night dimming, plate brightness and saturation, object brightness */
+  /* by mood (it follows the lanterns): lantern/ember glow, ember scale, night dimming, plate brightness and saturation, object brightness */
   --glow: .3; --es: .7; --dim: .5; --br: .82; --sat: .8; --aura: 0; --objb: .74; --objs: .9;
   --shaft: #bcd2ff; --lampA: 1;
 
@@ -78,23 +79,30 @@
 .sanc-ks.is-owned img { filter: brightness(var(--objb)) saturate(var(--objs)) drop-shadow(0 3px 5px rgba(0, 0, 0, .35)); }
 .sanc-ks.is-locked img { opacity: .58; filter: grayscale(.9) brightness(.55) contrast(.85) sepia(.25) drop-shadow(0 0 1px rgba(255, 236, 205, .75)); }
 .sanc-ks.is-locked .shadow { opacity: .35; }
+/* A locked keepsake you can afford gets a slow warm rim and no text: the hint that it is within reach. */
+.sanc-ks.is-locked.is-affordable img { opacity: .66; filter: grayscale(.85) brightness(.6) contrast(.85) sepia(.3) drop-shadow(0 0 2px rgba(255, 206, 140, .9)); animation: sanc-glint 4.5s ease-in-out infinite; }
+@keyframes sanc-glint { 50% { filter: grayscale(.85) brightness(.66) contrast(.85) sepia(.3) drop-shadow(0 0 4px rgba(255, 206, 140, 1)); } }
+:root[data-theme='light'] .sanc-ks.is-locked.is-affordable img { opacity: .58; filter: grayscale(1) brightness(.46) contrast(.9) drop-shadow(0 0 2px rgba(255, 222, 160, 1)); animation-name: sanc-glint-day; }
+@keyframes sanc-glint-day { 50% { filter: grayscale(1) brightness(.52) contrast(.9) drop-shadow(0 0 4px rgba(255, 226, 170, 1)); } }
+.sanc-ks.is-locked:hover img, .sanc-ks.is-locked.is-open img, .sanc-ks.is-locked:focus-visible img { animation: none; }
 .sanc-ks.is-locked:hover img, .sanc-ks.is-locked.is-open img, .sanc-ks.is-locked:focus-visible img { opacity: .72; filter: grayscale(.8) brightness(.66) contrast(.85) sepia(.3) drop-shadow(0 0 1.5px rgba(255, 236, 205, .95)); }
 :root[data-theme='light'] .sanc-ks.is-locked img { opacity: .5; filter: grayscale(1) brightness(.42) contrast(.9) drop-shadow(0 0 1px rgba(255, 250, 235, .8)); }
-:root[data-theme='light'] .sanc-ks.is-locked:hover img, :root[data-theme='light'] .sanc-ks.is-locked.is-open img { opacity: .66; filter: grayscale(1) brightness(.5) contrast(.9) drop-shadow(0 0 1.5px rgba(255, 250, 235, .95)); }
+:root[data-theme='light'] .sanc-ks.is-locked:hover img, :root[data-theme='light'] .sanc-ks.is-locked.is-open img, :root[data-theme='light'] .sanc-ks.is-locked:focus-visible img { opacity: .66; filter: grayscale(1) brightness(.5) contrast(.9) drop-shadow(0 0 1.5px rgba(255, 250, 235, .95)); }
 .sanc-ks:hover, .sanc-ks.is-open { transform: translate(-50%, -100%) scale(1.03); }
 .sanc-ks.is-painted, .sanc-ks.is-painted:hover, .sanc-ks.is-painted.is-open { transform: translate(-50%, -100%); }
 .sanc-ks.is-new img { animation: sanc-wake 1400ms var(--sanc-ease) 1; }
 @keyframes sanc-wake { 0% { filter: brightness(1.8) saturate(1.3) drop-shadow(0 0 14px rgba(255, 220, 150, .9)) } 100% { filter: brightness(var(--objb)) saturate(var(--objs)) drop-shadow(0 3px 5px rgba(0, 0, 0, .35)) } }
 
-/* In-world labels: carved parchment on a soft dark ground. Locked ones are the same, a step quieter. */
+/* In-world labels: carved parchment on a soft dark ground. A keepsake's name shows only while it is
+   hovered, focused or open; the jar's label always shows, as the one place the balance is. */
 .sanc-label { position: absolute; display: flex; align-items: baseline; gap: 5px; padding: 1px 7px 2px; border-radius: 999px; white-space: nowrap; pointer-events: none;
   transform: translate(-50%, 0) scale(var(--ts)); transform-origin: 50% 0;
   font-family: var(--serif); font-size: 11.5px; font-weight: 500; letter-spacing: .01em; color: var(--parch-2); text-shadow: var(--carve);
-  background: var(--label-ground); box-shadow: 0 0 8px 2px var(--label-ground); transition: opacity 400ms var(--sanc-ease); }
+  background: var(--label-ground); box-shadow: 0 0 8px 2px var(--label-ground); opacity: 0; transition: opacity 240ms var(--sanc-ease); }
+.sanc-label.is-shown, .sanc-label.is-jar { opacity: 1; }
 .sanc-label .price { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; font-size: 11px; color: var(--parch-2); font-variant-numeric: tabular-nums; }
 .sanc-label .price::before { content: ''; display: inline-block; width: 5px; height: 5px; margin-right: 3px; border-radius: 50%; background: var(--amber); opacity: .9; vertical-align: 1px; }
 .sanc-label.is-owned { color: var(--parch); }
-.sanc-label.is-quiet { opacity: 0; }
 
 /* ---------- Glimmer jar: three renders crossfaded by balance, motes on top ---------- */
 .sanc-jar { position: absolute; transform: translate(-50%, -100%); }
@@ -110,9 +118,10 @@
   animation: sanc-delta 1500ms var(--sanc-ease) 1; }
 @keyframes sanc-delta { 0% { opacity: 0; transform: translate(-50%, 6px) } 20% { opacity: 1 } 70% { opacity: 1; transform: translate(-50%, -14px) } 100% { opacity: 0; transform: translate(-50%, -22px) } }
 
-/* ---------- Energy: a wooden plank hanging under the lanterns ---------- */
-.sanc-sign { position: absolute; min-width: 148px; width: max-content; padding: 7px 10px 8px; white-space: nowrap; border-radius: 3px; color: var(--parch); transform-origin: 50% -16px;
-  font-size: 10.5px;
+/* ---------- Today: a wooden plank hanging under the lanterns, one line ----------
+   15px serif figure, "today" a step quieter. Width fits the text; min 112px so it still reads as a sign. */
+.sanc-sign { position: absolute; min-width: 112px; width: max-content; padding: 5px 12px 6px; white-space: nowrap; text-align: center; border-radius: 3px; color: var(--parch); transform-origin: 50% -16px;
+  font-size: 12.5px;
   background: repeating-linear-gradient(177deg, rgba(255, 220, 170, .04) 0 2px, transparent 2px 7px), linear-gradient(180deg, #5c3d22, #3e2914 70%, #35230f);
   box-shadow: 0 0 0 1px rgba(20, 10, 4, .7), inset 0 1px 0 rgba(255, 220, 170, .22), inset 0 -1px 0 rgba(0, 0, 0, .4), 0 6px 14px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .5);
   animation: sanc-signsway 9s ease-in-out infinite alternate; }
@@ -123,56 +132,21 @@
 .sanc-sign .twine::before { transform: rotate(60deg); }
 .sanc-sign .twine::after { transform: rotate(-60deg); }
 .sanc-sign .nail { position: absolute; left: 50%; top: -20px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f4dca8, #a7813f 70%); box-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
-.sanc-sign .r1 { display: flex; justify-content: space-between; align-items: baseline; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: rgba(241, 227, 196, .72); }
-.sanc-sign .r1 .note { letter-spacing: 0; text-transform: none; color: rgba(241, 227, 196, .55); font-variant-numeric: tabular-nums; }
-.sanc-sign .r2 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 3px; }
-.sanc-sign .r2 b { font-family: var(--serif); font-size: 17px; font-weight: 600; letter-spacing: -.005em; }
-.sanc-sign .r2 .num { font-size: 12.5px; color: rgba(241, 227, 196, .72); font-variant-numeric: tabular-nums; }
-.sanc-sign .r2 .num em { font-style: normal; font-weight: 600; color: var(--parch); font-size: 14px; }
-.sanc-sign .tally { display: flex; gap: 4px; margin-top: 7px; align-items: center; }
-.sanc-sign .tally i { position: relative; width: 9px; height: 12px; border-radius: 5px 5px 4px 4px; box-shadow: inset 0 0 0 1px rgba(241, 227, 196, .38); overflow: hidden; }
-.sanc-sign .tally i::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--f, 0) * 100%); background: linear-gradient(180deg, #ffe3a6, #ffb24a); transition: height 900ms var(--sanc-ease); }
-.sanc-sign .tally i::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 210, 130, .75), transparent 70%); opacity: var(--f, 0); mix-blend-mode: screen; transition: opacity 900ms var(--sanc-ease); }
-.sanc-sign .tally .t { margin-left: auto; font-size: 10.5px; color: rgba(241, 227, 196, .55); }
+.sanc-sign .line { display: flex; align-items: baseline; justify-content: center; gap: 5px; }
+.sanc-sign .line b { font-family: var(--serif); font-size: 15px; font-weight: 600; letter-spacing: -.005em; font-variant-numeric: tabular-nums; }
+.sanc-sign .line span { font-size: 11.5px; color: rgba(241, 227, 196, .72); }
+.sanc-sign .line.is-empty b { color: rgba(241, 227, 196, .72); font-weight: 500; }
 
-/* ---------- Growth: height marks carved into the trunk ---------- */
+/* ---------- Growth: one carved mark at the head of the groove ----------
+   The groove, its three notches and the sap are the meter; the mark says the stage and the hours to
+   the next one. */
 .sanc-carve { position: absolute; white-space: nowrap; pointer-events: none; transform: scale(var(--ts)); transform-origin: 0 0;
   margin: -1px 0 0 -6px; padding: 1px 6px 2px; border-radius: 999px; background: var(--label-ground); box-shadow: 0 0 8px 2px var(--label-ground);
   font-family: var(--serif); font-size: 11.5px; letter-spacing: .06em; color: var(--parch-2); text-shadow: var(--carve); }
-.sanc-carve.is-now { color: var(--parch); }
-.sanc-carve.is-next { color: var(--parch-3); }
-.sanc-carve.is-head { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; }
-.sanc-carve.is-sap { color: var(--amber); font-size: 12px; letter-spacing: .02em; text-shadow: 0 1px 0 rgba(0, 0, 0, .7), 0 0 10px rgba(255, 170, 80, .45); }
+.sanc-carve.is-mark { color: var(--parch); letter-spacing: .03em; }
+.sanc-carve.is-mark em { font-style: normal; color: var(--parch-2); }
+.sanc-carve.is-mark em::before { content: ' · '; }
 :root[data-theme='light'] .sanc-carve { text-shadow: 0 1px 0 rgba(0, 0, 0, .8), 0 0 6px rgba(0, 0, 0, .6); }
-:root[data-theme='light'] .sanc-carve.is-sap { color: #ffd08a; text-shadow: 0 1px 0 rgba(0, 0, 0, .85), 0 0 6px rgba(0, 0, 0, .6); }
-
-/* ---------- Today: a chalk slate leaning on the window rim ---------- */
-.sanc-slate { position: absolute; width: 187px; padding: 9px 12px 10px; white-space: nowrap; border-radius: 2px; transform: scale(var(--ts)) rotate(-1.6deg); transform-origin: 0 0;
-  color: #f1ece0;
-  background: radial-gradient(120% 90% at 30% 20%, rgba(255, 255, 255, .06), transparent 60%), linear-gradient(160deg, #343a3c, #262b2d 60%, #202425);
-  border: 4px solid #6a4a2a; border-image: linear-gradient(180deg, #7a5631, #5a3d21) 1;
-  box-shadow: 0 0 0 1px rgba(20, 10, 4, .7), inset 0 0 0 1px rgba(0, 0, 0, .45), inset 0 0 22px rgba(0, 0, 0, .35), 0 8px 16px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .6); }
-.sanc-slate::after { content: ''; position: absolute; left: -4px; right: -4px; bottom: -11px; height: 7px; border-radius: 50%; background: radial-gradient(ellipse, rgba(0, 0, 0, .6), transparent 70%); z-index: -1; }
-.sanc-slate .t { display: flex; justify-content: space-between; font-family: var(--serif); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: rgba(241, 236, 224, .6); }
-.sanc-slate .t span:last-child { letter-spacing: 0; text-transform: none; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; color: rgba(241, 236, 224, .5); }
-.sanc-slate .g { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-.sanc-slate .g div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.sanc-slate .g b { font-family: var(--serif); font-size: 20px; font-weight: 600; line-height: 1; letter-spacing: -.01em; font-variant-numeric: tabular-nums; text-shadow: 0 0 6px rgba(255, 255, 255, .18); }
-.sanc-slate .g b small { font-size: 12px; font-weight: 500; margin: 0 1px; color: rgba(241, 236, 224, .75); }
-.sanc-slate .g span { font-size: 10.5px; color: rgba(241, 236, 224, .66); }
-.sanc-slate .g b.tick { animation: sanc-chalk 700ms var(--sanc-ease) 1; }
-@keyframes sanc-chalk { 0% { transform: translateY(-3px); text-shadow: 0 0 10px rgba(255, 255, 255, .6) } 100% { transform: none } }
-
-/* ---------- The keepsakes tag, hanging under the lower shelf ---------- */
-.sanc-tag { position: absolute; transform: translate(-50%, 0) scale(var(--ts)); transform-origin: 50% 0; padding: 3px 8px 4px; border-radius: 2px; white-space: nowrap; cursor: pointer;
-  font-family: var(--serif); font-size: 11px; letter-spacing: .03em; color: rgba(241, 227, 196, .8);
-  background: linear-gradient(180deg, #55371e, #3b2612); box-shadow: 0 0 0 1px rgba(20, 10, 4, .7), inset 0 1px 0 rgba(255, 220, 170, .18), 0 3px 8px rgba(0, 0, 0, .45);
-  transition: color 150ms var(--sanc-ease), background 150ms var(--sanc-ease); }
-.sanc-tag::before { content: ''; position: absolute; left: 50%; top: -16px; width: 1.5px; height: 16px; margin-left: -1px; background: rgba(222, 196, 150, .85); }
-.sanc-tag:hover { color: var(--parch); background: linear-gradient(180deg, #644226, #452c16); }
-.sanc-tag:focus-visible { outline: 2px solid rgba(255, 196, 107, .8); outline-offset: 2px; }
-.sanc-tag.is-on { color: var(--parch); box-shadow: 0 0 0 1px rgba(20, 10, 4, .7), inset 0 1px 0 rgba(255, 220, 170, .18), 0 0 0 1.5px rgba(255, 196, 107, .55), 0 3px 8px rgba(0, 0, 0, .45); }
-.sanc-tag b { font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ---------- Cinder's spot while it's on the stopwatch ---------- */
 .sanc-away { position: absolute; display: flex; align-items: center; gap: 6px; padding: 1px 8px 2px; border-radius: 999px; white-space: nowrap; pointer-events: none;
@@ -194,7 +168,7 @@
 :root[data-theme='light'] .sanc-buddy .backlight { opacity: .4; }
 .sanc-buddy .shadow { position: absolute; left: 50%; bottom: -6px; width: 170px; height: 28px; margin-left: -85px; border-radius: 50%;
   background: radial-gradient(ellipse at 50% 50%, rgba(10, 8, 6, .62), rgba(10, 8, 6, .3) 45%, transparent 72%); transition: transform 900ms var(--sanc-ease), opacity 900ms var(--sanc-ease); }
-.sanc-buddy .rig, .sanc-buddy .sway, .sanc-buddy .breath { position: absolute; inset: 0; transform-origin: 50% 100%; }
+.sanc-buddy .rig, .sanc-buddy .jump, .sanc-buddy .sway, .sanc-buddy .breath { position: absolute; inset: 0; transform-origin: 50% 100%; }
 .sanc-buddy .sway { animation: sanc-sway 6.4s ease-in-out infinite alternate; }
 @keyframes sanc-sway { from { transform: rotate(-.9deg) } to { transform: rotate(.9deg) } }
 .sanc-buddy .breath { animation: sanc-breathe 4.2s ease-in-out infinite; }
@@ -210,7 +184,6 @@
   background: radial-gradient(circle, rgba(255, 246, 220, .95) 0%, rgba(255, 210, 130, .5) 25%, transparent 65%); animation: sanc-lightpulse 2.2s ease-in-out infinite; }
 .sanc-buddy .light.is-on { opacity: calc(var(--glow) * .9); }
 @keyframes sanc-lightpulse { 50% { transform: scale(1.12) } }
-.sanc-hearth.is-cheer .ember { animation: sanc-emberflare 1100ms var(--sanc-ease) 1; }
 @keyframes sanc-emberflare { 0% { transform: scale(var(--es)) } 22% { transform: scale(calc(var(--es) * 1.7)); opacity: 1 } 100% { transform: scale(var(--es)) } }
 .sanc-buddy .orbit { position: absolute; left: 50%; top: 44%; width: 0; height: 0; opacity: var(--aura); transition: opacity 1200ms var(--sanc-ease); transform: scaleY(.55); }
 .sanc-buddy .orbit i { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: #fff4d6; box-shadow: 0 0 8px 3px rgba(255, 214, 140, .85);
@@ -246,6 +219,76 @@
 .sanc-cinder.is-asleep .ember { opacity: calc(.25 + var(--glow) * .2); }
 .sanctuary-page[data-cinder='away'] .sanc-cinder { opacity: 0; }
 
+/* ---------- Buddies answer a click ----------
+   The figure's layers keep pointer-events: none; a transparent button sized to the painted body takes
+   the click. `.jump` sits between `.rig` and `.sway`, so the click motion composes with each mood's
+   idle motion (lively's hop cycle, radiant's hover). */
+.sanc-poke { position: absolute; left: 50%; bottom: 0; width: 46%; height: 84%; transform: translateX(-50%); border-radius: 46% 46% 30% 30% / 40% 40% 20% 20%; pointer-events: auto; cursor: pointer; }
+.sanc-poke:focus-visible { outline: 2px solid rgba(255, 196, 107, .85); outline-offset: 6px; }
+
+/* Hover: a lean toward the pointer (--lean is -1 or 1) and a brighter ember. */
+.sanc-buddy .jump { transition: transform 320ms var(--sanc-ease); }
+.sanc-buddy.is-hover .jump { transform: rotate(calc(var(--lean, 0) * 1.6deg)); }
+.sanc-buddy.is-hover .ember { opacity: calc(var(--glow) * .85 + .12); }
+.sanc-cinder.is-hover .ember { opacity: calc(.57 + var(--glow) * .35); }
+.sanc-cinder.is-asleep.is-hover .ember { opacity: calc(.37 + var(--glow) * .2); }
+
+/* The hop: squash, up 16px with a stretch, land with a squash, settle. 840ms. The pose crossfades
+   quickly while it plays (Hearth's glad pose, Cinder's cheer). */
+.sanc-buddy.is-poked .jump { animation: sanc-hop 840ms cubic-bezier(.2, .8, .2, 1) 1; }
+@keyframes sanc-hop {
+  0% { transform: translateY(0) scale(1, 1); }
+  12% { transform: translateY(2px) scale(1.06, .94); }
+  45% { transform: translateY(-16px) scale(.97, 1.04); }
+  70% { transform: translateY(0) scale(1.04, .96); }
+  85% { transform: translateY(-3px) scale(1, 1.01); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+.sanc-buddy.is-poked .ember, .sanc-buddy.is-spun .ember { animation: sanc-emberflare 900ms var(--sanc-ease) 200ms 1 backwards; }
+.sanc-buddy.is-poked .shadow { animation: sanc-hopshadow 840ms cubic-bezier(.2, .8, .2, 1) 1; }
+@keyframes sanc-hopshadow { 45% { transform: scale(.84); opacity: .6; } }
+.sanc-buddy.is-poked img.sp { transition-duration: 160ms; }
+.sanc-cinder.is-poked .light.is-on { animation: sanc-flare 900ms var(--sanc-ease) 1; }
+@keyframes sanc-flare { 30% { transform: scale(1.9); opacity: 1; } }
+
+/* A sitting buddy (asleep, stirring) doesn't hop: it rocks once and its ember warms. */
+.sanc-buddy.is-sitting .jump { animation: sanc-stirpoke 900ms var(--sanc-ease) 1; }
+@keyframes sanc-stirpoke { 25% { transform: rotate(-2.2deg) scale(1.01, .99); } 60% { transform: rotate(1.6deg); } }
+.sanc-buddy.is-sitting .ember { animation: sanc-emberwarm 900ms var(--sanc-ease) 1; }
+@keyframes sanc-emberwarm { 30% { transform: scale(calc(var(--es) * 1.25)); opacity: calc(var(--glow) * .85 + .3); } }
+.sanc-buddy.is-sitting .shadow { animation: none; }
+
+/* Three quick clicks: Hearth turns round on the spot. */
+.sanc-buddy.is-spun .jump { animation: sanc-spin 900ms cubic-bezier(.3, .7, .2, 1) 1; }
+@keyframes sanc-spin { 0% { transform: perspective(600px) rotateY(0) } 50% { transform: perspective(600px) rotateY(180deg) translateY(-10px) } 100% { transform: perspective(600px) rotateY(360deg) } }
+
+/* The glance: when one buddy is clicked, the other's light flares a moment later. */
+.sanc-cinder.is-glance .light.is-on { animation: sanc-glance 600ms var(--sanc-ease) 1; }
+@keyframes sanc-glance { 40% { transform: scale(1.5); opacity: 1; } }
+.sanc-hearth.is-glance .ember { animation: sanc-emberflare 900ms var(--sanc-ease) 1; }
+
+/* Spores off Hearth's buds (8 a click, 18 on a turn), sparks off Cinder's flame (7): short flights up. */
+.sanc-motes { position: absolute; width: 0; height: 0; pointer-events: none; }
+.sanc-motes i { position: absolute; left: -2.5px; top: -2.5px; width: 5px; height: 5px; border-radius: 50%; opacity: 0; mix-blend-mode: screen;
+  background: #e9f7b8; box-shadow: 0 0 6px 2px rgba(214, 244, 150, .7); }
+.sanc-cinder .sanc-motes i { left: -2px; top: -2px; width: 4px; height: 4px; background: #ffe3a6; box-shadow: 0 0 6px 2px rgba(255, 190, 90, .8); }
+.sanc-buddy.is-poked:not(.is-sitting) .sanc-motes i:nth-child(-n + 8), .sanc-buddy.is-spun .sanc-motes i { animation: sanc-mote 1100ms cubic-bezier(.2, .6, .3, 1) 1 backwards; animation-delay: calc(200ms + var(--o, 0ms)); }
+@keyframes sanc-mote { 0% { opacity: 0; transform: translate(0, 0) scale(.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1); } }
+
+/* The bubble: one plain line beside the head, on a small parchment slip like the keepsake card, with
+   two beads trailing to the head. Fades in 120ms after the click. */
+.sanc-bubble { position: absolute; z-index: 25; left: 0; top: 0; padding: 5px 11px 6px; border-radius: 999px; white-space: nowrap; pointer-events: none;
+  font-family: var(--serif); font-size: 12.5px; font-weight: 500; letter-spacing: .01em; color: #2b2114;
+  background: radial-gradient(120% 100% at 20% 0%, rgba(255, 255, 255, .4), transparent 55%), #efe1c3;
+  box-shadow: 0 0 0 1px #b89a68, inset 0 0 0 1px rgba(255, 250, 235, .6), 0 6px 14px rgba(0, 0, 0, .35), 0 1px 2px rgba(0, 0, 0, .3);
+  opacity: 0; transform: translateY(4px) rotate(-.6deg); transition: opacity 180ms var(--sanc-ease), transform 220ms var(--sanc-ease); }
+.sanc-bubble.is-on { opacity: 1; transform: translateY(0) rotate(-.6deg); transition-delay: 120ms; }
+.sanc-bubble i { position: absolute; border-radius: 50%; background: #efe1c3; box-shadow: 0 0 0 1px #b89a68, 0 2px 4px rgba(0, 0, 0, .3); }
+.sanc-bubble i:first-of-type { left: -9px; bottom: -7px; width: 7px; height: 7px; }
+.sanc-bubble i:last-of-type { left: -17px; bottom: -14px; width: 4px; height: 4px; }
+.sanc-bubble[data-side='left'] i:first-of-type { left: auto; right: -9px; }
+.sanc-bubble[data-side='left'] i:last-of-type { left: auto; right: -17px; }
+
 /* ---------- Keepsake card: a parchment shop tag on twine ---------- */
 .sanc-cardline { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 29; transition: opacity 180ms var(--sanc-ease); }
 .sanc-cardline line { stroke: rgba(230, 206, 160, .9); stroke-width: 1.5; stroke-linecap: round; }
@@ -262,6 +305,7 @@
 .sanc-card .foot.is-wrap { flex-wrap: wrap; }
 .sanc-card .price { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #6c5a3c; font-variant-numeric: tabular-nums; }
 .sanc-card .price::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--amber-deep); box-shadow: 0 0 4px rgba(255, 160, 70, .6); }
+.sanc-card .price.is-plain::before { display: none; }
 .sanc-card .buy { height: 28px; padding: 0 12px; border-radius: 6px; font-size: 12.5px; font-weight: 500; color: #f4e9d2; background: #3a2816; cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255, 230, 190, .14), 0 1px 2px rgba(0, 0, 0, .3); transition: background 150ms var(--sanc-ease), transform 150ms var(--sanc-ease); }
 .sanc-card .buy:hover { background: #4c3520; }
@@ -282,4 +326,12 @@
 @media (prefers-reduced-motion: reduce) {
   .sanctuary-page *, .sanctuary-page *::before, .sanctuary-page *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
   .sanc-world, .sanc-buddy { transition: none; }
+  /* A click: no hop, turn, lean or motes. The pose, the ember and the flame change in 200ms and the
+     bubble fades in without rising, so the click still answers. */
+  .sanc-buddy.is-poked .jump, .sanc-buddy.is-spun .jump, .sanc-buddy.is-poked .shadow, .sanc-buddy.is-hover .jump { animation: none !important; transform: none !important; }
+  .sanc-buddy .sanc-motes i { animation: none !important; opacity: 0; }
+  .sanc-buddy.is-poked img.sp { transition: opacity 200ms linear !important; }
+  .sanc-buddy.is-poked .ember, .sanc-buddy.is-glance .ember { animation: none !important; opacity: calc(var(--glow) * .85 + .3); transition: opacity 200ms linear !important; }
+  .sanc-cinder.is-poked .light.is-on, .sanc-cinder.is-glance .light.is-on { animation: none !important; opacity: 1; transition: opacity 200ms linear !important; }
+  .sanc-bubble { transform: none !important; transition: opacity 200ms linear !important; }
 }

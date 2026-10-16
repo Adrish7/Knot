@@ -34,8 +34,35 @@
 @keyframes cinder-flare { 40% { transform: translate(-50%, -50%) scale(1.5); } }
 @keyframes cinder-steam { 0% { opacity: 0; transform: translateY(0) scaleX(1); } 25% { opacity: 0.7; } 100% { opacity: 0; transform: translateY(-18px) scaleX(1.8); } }
 
+/* A click: a hop with a flare and sparks off the flame (the page shows the cheer pose), a stir when
+   asleep, a sip of tea on a break, and one line above the head. The figure's layers keep
+   pointer-events: none; a transparent button over the body takes the click. */
+.cinder .cinder-poke { position: absolute; left: 50%; bottom: 0; width: 70%; height: 90%; transform: translateX(-50%); border-radius: 40% 40% 24% 24% / 34% 34% 16% 16%; pointer-events: auto; cursor: pointer; }
+.cinder .cinder-poke:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 5px; }
+.cinder:has(.cinder-poke:hover) .cinder-halo { opacity: calc(0.28 + 0.42 * var(--focus)); }
+:root:not([data-theme='dark']) .cinder:has(.cinder-poke:hover) .cinder-halo { opacity: calc(0.2 + 0.35 * var(--focus)); }
+.cinder.is-poked .cinder-rig { animation: cinder-hop 760ms cubic-bezier(0.3, 0.9, 0.3, 1) 1; }
+.cinder.is-poked .cinder-halo { animation: cinder-flare 1100ms var(--ease) 1; }
+.cinder.is-asleep.is-poked .cinder-rig { animation: cinder-stir 900ms var(--ease) 1; }
+.cinder.is-break.is-poked .cinder-rig { animation: cinder-breathe 5s ease-in-out infinite; }
+.cinder.is-asleep.is-poked .cinder-halo, .cinder.is-break.is-poked .cinder-halo { animation: cinder-flicker 2.6s ease-in-out infinite; }
+@keyframes cinder-stir { 25% { transform: rotate(-2.5deg); } 60% { transform: rotate(1.8deg); } }
+.cinder-sparks { position: absolute; left: var(--tip-x); top: var(--tip-y); width: 0; height: 0; pointer-events: none; }
+.cinder-sparks i { position: absolute; left: -2px; top: -2px; width: 4px; height: 4px; border-radius: 50%; background: #ffe3a6; box-shadow: 0 0 6px 2px rgba(255, 190, 90, 0.8); opacity: 0; mix-blend-mode: screen; }
+.cinder.is-poked:not(.is-asleep):not(.is-break) .cinder-sparks i { animation: cinder-spark 1000ms cubic-bezier(0.2, 0.6, 0.3, 1) 1 backwards; animation-delay: var(--o, 0ms); }
+@keyframes cinder-spark { 0% { opacity: 0; transform: translate(0, 0) scale(0.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1); } }
+/* The bubble: the Stopwatch's own tip look (.sw-tip), one line, centred above the head. */
+.cinder-bubble { position: absolute; left: 50%; bottom: calc(100% + 10px); z-index: 20; width: max-content; padding: 6px 10px; border-radius: var(--r-pop); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md);
+  transform: translateX(-50%) translateY(4px); color: var(--text); font-size: 12.5px; font-weight: 500; line-height: 16px; white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity 150ms var(--ease), transform 200ms var(--ease); }
+.cinder-bubble.is-on { opacity: 1; transform: translateX(-50%) translateY(0); }
+.cinder-bubble::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; margin-left: -4px; background: var(--surface); border-right: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong); transform: rotate(45deg); }
+
 @media (prefers-reduced-motion: reduce) {
   .cinder, .cinder * { animation: none !important; transition: none !important; }
+  .cinder img { transition: opacity 200ms linear !important; }
+  .cinder-bubble { transform: translateX(-50%) !important; transition: opacity 200ms linear !important; }
+  .cinder.is-poked .cinder-halo { opacity: calc(0.4 + 0.42 * var(--focus)); transition: opacity 200ms linear !important; }
 }
 
 /* On the Stopwatch page: feet on the controls row's bottom edge, 40px right of the basin's rim or 40px

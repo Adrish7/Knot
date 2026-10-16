@@ -888,7 +888,11 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
 .hearth-badge.is-asleep img { filter: saturate(0.85) brightness(0.92); }
 .hearth-badge.is-cheer { animation: hearth-badge-bounce 700ms var(--ease) 1; }
 @keyframes hearth-badge-bounce { 30% { transform: translateY(-3px); } 60% { transform: translateY(1px); } }
+/* A click bounces it and runs a ring out from the circle (an outline, since the badge clips its
+   overflow): amber while the Sanctuary's chrome is on, the Sanctuary's colour elsewhere. */
+.hearth-badge.is-poked { animation: hearth-badge-bounce 700ms var(--ease) 1, hearth-badge-ring 700ms var(--ease) 1; outline: 1.5px solid transparent; }
+@keyframes hearth-badge-ring { 0% { outline-offset: 0; outline-color: color-mix(in srgb, var(--c-sanctuary) 75%, transparent); } 100% { outline-offset: 8px; outline-color: transparent; } }
+.app-shell.is-sanctuary .hearth-badge.is-poked { animation-name: hearth-badge-bounce, hearth-badge-ring-amber; }
+@keyframes hearth-badge-ring-amber { 0% { outline-offset: 0; outline-color: rgba(255, 196, 107, .8); } 100% { outline-offset: 8px; outline-color: transparent; } }
 .sidebar.is-collapsed .hearth-badge { display: none; }
-@media (prefers-reduced-motion: reduce) { .hearth-badge, .hearth-badge img { transition: none; animation: none; } }
-.sanctuary-glimmers { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; color: var(--text-2); font-variant-numeric: tabular-nums; }
-.sanctuary-glimmers svg { color: var(--c-sanctuary); fill: currentColor; }
+@media (prefers-reduced-motion: reduce) { .hearth-badge, .hearth-badge img, .app-shell .hearth-badge.is-poked { transition: none; animation: none; } }

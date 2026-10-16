@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { flushSync } from 'react-dom'
 import cinderAsleep from '../../assets/sanctuary/cinder-asleep.avif'
 import cinderAwake from '../../assets/sanctuary/cinder-awake.avif'
+import cinderCheer from '../../assets/sanctuary/cinder-cheer.avif'
 import hollowDay from '../../assets/sanctuary/hollow-day.avif'
 import hollowNight from '../../assets/sanctuary/hollow-night.avif'
 import jarFull from '../../assets/sanctuary/jar-full.avif'
@@ -15,11 +17,10 @@ import keepSprout from '../../assets/sanctuary/keep-sprout.avif'
 import keepStarjar from '../../assets/sanctuary/keep-starjar.avif'
 import keepTeacup from '../../assets/sanctuary/keep-teacup.avif'
 import keepTelescope from '../../assets/sanctuary/keep-telescope.avif'
-import { todayDate } from '../../format'
-import { GROWTH_STAGES, KEEPSAKES } from '../../sanctuary'
+import { GLIMMER_MINUTES, GROWTH_STAGES, KEEPSAKES, hoursMinutes as hm } from '../../sanctuary'
 import type { EnergyState, SanctuaryStats } from '../../sanctuary'
 import type { SanctuaryState } from '../../types'
-import { HEARTH, STAGE_SPRITES, hearthSprite } from './sprites'
+import { HEARTH, HEARTH_GLAD, STAGE_SPRITES, hearthSprite } from './sprites'
 import type { Sprite } from './sprites'
 import './Sanctuary.css'
 
@@ -28,12 +29,13 @@ export interface SanctuaryPageProps {
   state: SanctuaryState // keepsakes owned
   cinderAway: boolean // a stopwatch is running, so Cinder is on the Stopwatch page
   onBuy: (id: string) => boolean
+  poke: number // bumped by a click on Hearth's face in the sidebar while this page is open
 }
 
 // The hollow is one painted plate (1586 x 992), drawn `cover` into the world box. Everything in
 // the scene is anchored in plate pixels and mapped through one registration, so it stays on its
 // painted spot at any window size. Objects (sprites, the jar) scale with the plate; text objects
-// (the energy plank, the slate, labels, the card) keep their type size and only move.
+// (the plank, the growth mark, labels, bubbles, the card) keep their type size and only move.
 
 const PW = 1586
 const PH = 992
@@ -43,7 +45,6 @@ const SEEN_KEY = 'knot.sanctuary.lastSeenEarned'
 
 interface Geo { S: number; OX: number; OY: number; W: number; H: number }
 
-const LABELS: Record<EnergyState, string> = { asleep: 'Asleep', stirring: 'Stirring', awake: 'Awake', lively: 'Lively', radiant: 'Radiant' }
 const FLIES: Record<EnergyState, number> = { asleep: 3, stirring: 7, awake: 12, lively: 20, radiant: 30 }
 
 // The five painted lanterns: glass centre and radii, and where the flame sits.
@@ -80,6 +81,7 @@ const BH = 320
 const CINDER = {
   asleep: { src: cinderAsleep, w: 276, h: 427, height: 148, ember: [0.5, 0.62], light: [0.52, 0.04], feet: [248, 706] },
   awake: { src: cinderAwake, w: 306, h: 601, height: 206, ember: [0.5, 0.6], light: [0.5, 0.03], feet: [252, 846] },
+  cheer: { src: cinderCheer, w: 361, h: 623, height: 213, ember: [0.5, 0.6], light: [0.52, 0.04], feet: [252, 846] }, // its click pose
 } as const
 const CW = 200
 const CH = 240
@@ -93,6 +95,15 @@ const rand = seeded(7)
 const JAR_MOTES = Array.from({ length: 26 }, () => ({ x: 22 + rand() * 56, y: 30 + rand() * 58, d: 1.6 + rand() * 1.8, o: -rand() * 3 }))
 const ORBIT = Array.from({ length: 9 }, () => ({ r: 62 + rand() * 70, d: 9 + rand() * 9, o: -rand() * 18 }))
 const FLAME_DELAYS = LAMPS.map(() => -rand() * 3)
+// Spores off Hearth's buds and sparks off Cinder's flame: a spread of short flights upward. A click
+// sends the first 8 (Cinder 7), three quick clicks all 18.
+const motes = (count: number, spread: number) => Array.from({ length: count }, (_, i) => {
+  const angle = (i / count) * Math.PI * 2 + rand() * 0.6
+  const reach = spread * (0.5 + rand() * 0.6)
+  return { '--dx': `${(Math.cos(angle) * reach).toFixed(0)}px`, '--dy': `${(-30 - Math.abs(Math.sin(angle)) * reach * 0.5).toFixed(0)}px`, '--o': `${(rand() * 220).toFixed(0)}ms` } as CSSProperties
+})
+const SPORES = motes(18, 30)
+const SPARKS = motes(7, 22)
 
 // Sprite height in px at the design scale: the standing poses are 272 tall, the sprout and the
 // elder have their own heights.
@@ -111,10 +122,8 @@ function sapY(sap: number) {
   return elder - Math.min(16, (sap - elderFrom) * 1.2)
 }
 
-const SLATE_DATE = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const smooth = (value: number, from: number, to: number) => clamp((value - from) / (to - from), 0, 1)
-const plural = (count: number, one: string, many: string) => count === 1 ? one : many
 
 function readSeen(): number | null {
   try {
@@ -150,18 +159,12 @@ function useReducedMotion() {
   return reduced
 }
 
-// Restarts a CSS animation by bumping a key whenever `value` changes after the first render.
-function useTick(value: number) {
-  const [tick, setTick] = useState(0)
-  const first = useRef(value)
-  useEffect(() => { if (value !== first.current) { first.current = value; setTick((n) => n + 1) } }, [value])
-  return tick
-}
-
+type Buddy = 'hearth' | 'cinder'
+type Move = 'hop' | 'stir' | 'spin' // a standing buddy hops, a sitting one stirs, three quick clicks turn Hearth round
 interface Spark { x: number; y: number; vx: number; vy: number; life: number }
 interface Fly { x: number; y: number; c: [number, number, number]; r: number; t: number; sp: number; a: number; vx: number; vy: number; life: number }
 
-export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPageProps) {
+export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: SanctuaryPageProps) {
   const theme = useDocumentTheme()
   const reduced = useReducedMotion()
   const sceneRef = useRef<HTMLDivElement>(null)
@@ -173,16 +176,15 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPage
   const objectRefs = useRef(new Map<string, HTMLElement>())
   const clampRefs = useRef(new Map<string, HTMLElement>())
   const moteRefs = useRef<(HTMLDivElement | null)[]>([])
+  const bubbleRefs = useRef(new Map<Buddy, HTMLElement>())
   const [geo, setGeo] = useState<Geo | null>(null)
 
-  const [browse, setBrowse] = useState(false)
   const [hoverId, setHoverId] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [cardId, setCardId] = useState<string>('starjar') // the card keeps its last content while it fades out
   const [cardPos, setCardPos] = useState<{ left: number; top: number; ax: number; ay: number } | null>(null)
   const [newId, setNewId] = useState<string | null>(null)
   const [jarDelta, setJarDelta] = useState<{ text: string; key: number } | null>(null)
-  const [cheer, setCheer] = useState(false)
 
   // Shared with the canvas loop without re-running it.
   const fx = useRef({ geo: null as Geo | null, theme, flies: FLIES[stats.energyState], reduced, sparks: [] as Spark[], kick: () => {} })
@@ -214,10 +216,8 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPage
   const k = S / S0 // figures scale with the plate
   const ts = clamp(S / S0, 1, 1.2) // text objects may grow on a big window, never shrink
   const W = geo?.W ?? 0
-  const H = geo?.H ?? 0
   // Keep a fixed-size text object inside the visible part of the world.
   const fitX = (left: number, width: number) => clamp(left, EDGE + 8, Math.max(EDGE + 8, W - EDGE - 8 - width))
-  const fitY = (top: number, height: number) => clamp(top, EDGE + 8, Math.max(EDGE + 8, H - EDGE - 8 - height))
 
   // Labels are centred on their anchor; pull them back in where the window cuts the plate.
   useLayoutEffect(() => {
@@ -232,8 +232,6 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPage
 
   /* ---------- Keepsakes ---------- */
   const owned = useMemo(() => new Set(state.keepsakes), [state.keepsakes])
-  const nextUp = useMemo(() => KEEPSAKES.filter((item) => !owned.has(item.id)).sort((a, b) => a.price - b.price).slice(0, 3).map((item) => item.id), [owned])
-  const ownedCount = KEEPSAKES.filter((item) => owned.has(item.id)).length
 
   /* ---------- The jar shows what has landed; a reward in flight is still on its way ---------- */
   const [landed, setLanded] = useState(() => {
@@ -261,6 +259,7 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPage
   /* ---------- Arrival reward: glimmers earned since the last visit fly from Hearth to the jar ---------- */
   const timers = useRef<number[]>([])
   useEffect(() => () => { timers.current.forEach((timer) => clearTimeout(timer)) }, [])
+  const pokeRef = useRef<(who: Buddy, say?: boolean) => void>(() => {})
   const mountedAt = useRef(performance.now())
   useEffect(() => {
     const earned = stats.earned
@@ -276,8 +275,7 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPage
       const ember = emberRef.current
       const jar = jarRef.current
       if (reduced || !scene || !ember || !jar) { setLanded(earned); tickJar(delta); return }
-      setCheer(true)
-      timers.current.push(window.setTimeout(() => setCheer(false), 1100))
+      pokeRef.current('hearth', false) // Hearth hops as the glimmers leave it
       const box = scene.getBoundingClientRect()
       const e = ember.getBoundingClientRect()
       const j = jar.getBoundingClientRect()
@@ -490,36 +488,140 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPage
 
   /* ---------- Derived view values ---------- */
   const lit = (i: number) => i < stats.lanterns ? 1 : i === stats.lanterns ? stats.partial : 0
-  const litCount = Math.min(5, stats.lanterns)
-  const stageIndex = GROWTH_STAGES.findIndex((stage) => stage.id === stats.growth.stage.id)
   const sapLevel = sapY(stats.sap)
-  const sapText = stats.growth.next ? `${Math.max(1, Math.ceil(stats.growth.toNext))} h to ${stats.growth.next.name}` : `${Math.round(stats.sap)} h of sap`
+  const { stage, next, toNext } = stats.growth
+  const focusMin = Math.floor(stats.today.focusSeconds / 60)
+  const breakMin = Math.round(stats.today.breakSeconds / 60)
 
-  const hearth = hearthSprite(stats.energyState, stats.growth.stage.id)
-  const hearthSet = STAGE_SPRITES[stats.growth.stage.id] ? [STAGE_SPRITES[stats.growth.stage.id]!] : Object.values(HEARTH)
+  /* ---------- The buddies answer a click: a hop (or a stir), a pose, motes, one plain line ---------- */
+  const [moves, setMoves] = useState<Record<Buddy, Move | null>>({ hearth: null, cinder: null })
+  const [bubbles, setBubbles] = useState<Record<Buddy, { text: string; on: boolean }>>({ hearth: { text: '', on: false }, cinder: { text: '', on: false } })
+  const [glad, setGlad] = useState(false) // Hearth's glad pose, mid-hop
+  const [cinderCheer, setCinderCheer] = useState(false)
+  const [glance, setGlance] = useState<Buddy | null>(null) // the other buddy's light flares when one is clicked
+  const [hover, setHover] = useState<{ who: Buddy; lean: number } | null>(null)
+  const said = useRef<Record<Buddy, number>>({ hearth: 0, cinder: 0 }) // the line index; resets when the page is left
+  const clicks = useRef<number[]>([])
+  const reactionTimers = useRef(new Map<string, number>())
+  useEffect(() => () => { reactionTimers.current.forEach((timer) => clearTimeout(timer)) }, [])
+  // One timer per key: a new click replaces the pending step instead of stacking another.
+  const after = (key: string, ms: number, run: () => void) => {
+    clearTimeout(reactionTimers.current.get(key))
+    reactionTimers.current.set(key, window.setTimeout(run, ms))
+  }
+
+  const hearth = hearthSprite(stats.energyState, stage.id)
+  const staged = Boolean(STAGE_SPRITES[stage.id]) // the sprout and the elder: one pose, no sitting, no glad
+  const hearthSits = !staged && (stats.energyState === 'asleep' || stats.energyState === 'stirring')
+  const hearthShown = glad && !staged && !hearthSits ? HEARTH_GLAD : hearth
+  const hearthSet = staged ? [hearth] : [...new Map([...Object.values(HEARTH), HEARTH_GLAD].map((sprite) => [sprite.src, sprite])).values()]
   const hH = spriteHeight(hearth)
   const hW = hH * hearth.w / hearth.h
   const emberStyle = { left: (BW - hW) / 2 + hearth.ember[0] * hW, top: BH - hH + hearth.ember[1] * hH }
 
   const cinderPose = stats.energyState === 'asleep' ? 'asleep' : 'awake'
-  const cinder = CINDER[cinderPose]
+  const cinderShown = cinderPose === 'awake' && cinderCheer ? 'cheer' : cinderPose
+  const cinder = CINDER[cinderShown]
   const cH = cinder.height
   const cWd = cH * cinder.w / cinder.h
+  const cinderBase = CINDER[cinderPose] // the hit area keeps to the resting pose
 
-  const focusMin = Math.floor(stats.today.focusSeconds / 60)
-  const breakMin = Math.round(stats.today.breakSeconds / 60)
-  const date = SLATE_DATE.format(todayDate())
-  const tickTasks = useTick(stats.today.tasksDone)
-  const tickFocus = useTick(focusMin)
-  const tickBreaks = useTick(breakMin)
-  const tickDays = useTick(stats.today.focusDaysKept)
+  const hearthLines = () => focusMin === 0 ? ['Nothing yet today'] : [
+    `${hm(focusMin)} today`,
+    stats.lanterns >= 5 ? 'All five lit' : `${hm(Math.max(1, Math.ceil(stats.nextLanternSeconds / 60)))} to the next lantern`,
+    next ? `${Math.max(1, Math.ceil(toNext))}\u2009h to ${next.name}` : `${stage.name} · ${Math.round(stats.sap)}\u2009h`,
+    `${stats.balance} ${stats.balance === 1 ? 'glimmer' : 'glimmers'} in the jar`,
+  ]
+  const cinderLines = () => cinderPose === 'asleep' ? ['Asleep until a stopwatch runs'] : ['Nothing running', ...(breakMin > 0 ? [`${hm(breakMin)} of breaks today`] : [])]
 
-  // The sign hangs from a nail at plate (226, 326); the slate leans at (1218, 652).
-  // Both are fixed-size; `ts` scales them about the nail and the top-left corner.
-  const signLeft = fitX(px(226) - 80 * ts, 160 * ts) + 80 * ts // the plank's centre; it is a little wider with Radiant 100
+  const pokeBuddy = (who: Buddy, say = true) => {
+    const sits = who === 'hearth' ? hearthSits : cinderPose === 'asleep'
+    let move: Move = sits ? 'stir' : 'hop'
+    if (who === 'hearth' && say) {
+      const now = performance.now()
+      clicks.current = [...clicks.current.filter((at) => now - at < 900), now]
+      if (clicks.current.length >= 3 && stats.energyState !== 'asleep' && !reduced) { move = 'spin'; clicks.current = [] }
+    }
+    // Take the class off and put it back so a click mid-reaction restarts it.
+    flushSync(() => setMoves((current) => ({ ...current, [who]: null })))
+    void sceneRef.current?.offsetWidth
+    setMoves((current) => ({ ...current, [who]: move }))
+    after(`${who}.move`, 1200, () => setMoves((current) => ({ ...current, [who]: null })))
+
+    if (move === 'hop' && who === 'hearth' && !staged) {
+      after('hearth.pose', 120, () => setGlad(true))
+      after('hearth.unpose', 820, () => setGlad(false))
+    }
+    if (move === 'hop' && who === 'cinder') {
+      after('cinder.pose', 120, () => setCinderCheer(true))
+      after('cinder.unpose', 900, () => setCinderCheer(false))
+    }
+
+    const other: Buddy = who === 'hearth' ? 'cinder' : 'hearth'
+    const otherAwake = other === 'cinder' ? !cinderAway && cinderPose !== 'asleep' : stats.energyState !== 'asleep'
+    if (otherAwake) after('glance', 240, () => {
+      flushSync(() => setGlance(null))
+      setGlance(other)
+      after('glance.end', 900, () => setGlance(null))
+    })
+
+    if (!say) return
+    const lines = who === 'hearth' ? hearthLines() : cinderLines()
+    const text = lines[said.current[who] % lines.length]
+    said.current[who] += 1
+    const show = () => setBubbles((current) => ({ ...current, [who]: { text, on: true } }))
+    if (move === 'spin') {
+      setBubbles((current) => ({ ...current, [who]: { ...current[who], on: false } }))
+      after(`${who}.say`, 900, show) // the line waits for the turn to finish
+    } else {
+      clearTimeout(reactionTimers.current.get(`${who}.say`))
+      show()
+    }
+    after(`${who}.quiet`, (move === 'spin' ? 900 : 0) + 2400, () => setBubbles((current) => ({ ...current, [who]: { ...current[who], on: false } })))
+  }
+  pokeRef.current = pokeBuddy
+
+  // A click on Hearth's face in the sidebar, while this page is open, pokes the Hearth in the scene.
+  const lastPoke = useRef(poke)
+  useEffect(() => {
+    if (poke === lastPoke.current) return
+    lastPoke.current = poke
+    queueMicrotask(() => pokeRef.current('hearth')) // after this commit: the poke flushes a render of its own
+  }, [poke])
+
+  // Hover: lean toward the pointer.
+  const leanAt = (who: Buddy) => (event: React.PointerEvent<HTMLElement>) => {
+    const box = event.currentTarget.getBoundingClientRect()
+    const lean = event.clientX < box.left + box.width / 2 ? -1 : 1
+    setHover((current) => current?.who === who && current.lean === lean ? current : { who, lean })
+  }
+  const unlean = (who: Buddy) => () => setHover((current) => current?.who === who ? null : current)
+  const buddyClass = (who: Buddy) => {
+    const move = moves[who]
+    return [move === 'spin' ? 'is-spun' : move ? 'is-poked' : '', move === 'stir' ? 'is-sitting' : '', glance === who ? 'is-glance' : '', hover?.who === who ? 'is-hover' : ''].join(' ')
+  }
+
+  // Bubbles sit right of the head; one that would leave the scene flips to the left.
+  const bubbleAt = {
+    hearth: { x: px(HEARTH_FEET[0]), dx: 34 * k, top: py(HEARTH_FEET[1]) - hH * k - 26 },
+    cinder: { x: px(cinderBase.feet[0]), dx: 28 * k, top: py(cinderBase.feet[1]) - cinderBase.height * k - 18 },
+  }
+  useLayoutEffect(() => {
+    if (!geo) return
+    for (const [who, node] of bubbleRefs.current) {
+      const { x, dx, top } = bubbleAt[who]
+      const width = node.offsetWidth
+      const left = x + dx + width > geo.W - EDGE - 8 ? x - dx - width : x + dx
+      node.dataset.side = left < x ? 'left' : 'right'
+      node.style.left = `${clamp(left, EDGE + 8, Math.max(EDGE + 8, geo.W - EDGE - 8 - width)).toFixed(1)}px`
+      node.style.top = `${Math.max(EDGE + 8, top).toFixed(1)}px`
+    }
+  })
+  const bubbleRef = (who: Buddy) => (node: HTMLElement | null) => { if (node) bubbleRefs.current.set(who, node); else bubbleRefs.current.delete(who) }
+
+  // The plank hangs from a nail at plate (226, 326). It is fixed-size; `ts` scales it about the nail.
+  const signLeft = fitX(px(226) - 80 * ts, 160 * ts) + 80 * ts // the plank's centre
   const signTop = py(326) + 20
-  const slateLeft = fitX(px(1218), 187 * ts)
-  const slateTop = fitY(py(652), 128 * ts)
 
   const at = (x: number, y: number): CSSProperties => ({ left: px(x), top: py(y) })
   const card = KEEPSAKES.find((item) => item.id === cardId) ?? KEEPSAKES[0]
@@ -585,7 +687,7 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPage
           {KEEPSAKES.map((item) => {
             const place = PLACES[item.id]
             const isOwned = owned.has(item.id)
-            const classes = ['sanc-ks', isOwned ? 'is-owned' : 'is-locked', place.painted ? 'is-painted' : '', place.hang ? 'is-hang' : '', openId === item.id ? 'is-open' : '', newId === item.id ? 'is-new' : ''].join(' ')
+            const classes = ['sanc-ks', isOwned ? 'is-owned' : 'is-locked', !isOwned && stats.balance >= item.price ? 'is-affordable' : '', place.painted ? 'is-painted' : '', place.hang ? 'is-hang' : '', openId === item.id ? 'is-open' : '', newId === item.id ? 'is-new' : ''].join(' ')
             const style: CSSProperties = place.painted
               ? { left: px(place.painted.at[0]), top: py(place.painted.at[1] + place.painted.r * 0.7), width: place.painted.r * 2 * S, height: place.painted.r * 1.6 * S }
               : { left: px(place.base![0]), top: py(place.base![1]), width: place.w! * S, height: place.w! * place.ratio! * S }
@@ -637,101 +739,105 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPage
             ))}
           </svg>
 
-          {/* Labels: names under the objects, the growth carving */}
+          {/* Labels: a keepsake's name only while it is hovered, focused or open; the jar's always */}
           {KEEPSAKES.map((item) => {
             const place = PLACES[item.id]
             const isOwned = owned.has(item.id)
-            const shown = isOwned || browse || nextUp.includes(item.id) || hoverId === item.id || openId === item.id
+            const shown = hoverId === item.id || openId === item.id
             return (
-              <div key={item.id} ref={clampRef(item.id)} data-x={px(place.label[0])} className={`sanc-label ${isOwned ? 'is-owned' : ''} ${shown ? '' : 'is-quiet'}`} style={{ top: py(place.label[1]) }}>
+              <div key={item.id} ref={clampRef(item.id)} data-x={px(place.label[0])} className={`sanc-label ${isOwned ? 'is-owned' : ''} ${shown ? 'is-shown' : ''}`} style={{ top: py(place.label[1]) }}>
                 <span>{item.name}</span>
                 {!isOwned && <span className="price">{item.price}</span>}
               </div>
             )
           })}
-          <div ref={clampRef('jar')} data-x={px(JAR.label[0])} className="sanc-label is-owned" style={{ top: py(JAR.label[1]) }}>
+          <div ref={clampRef('jar')} data-x={px(JAR.label[0])} className="sanc-label is-owned is-jar" style={{ top: py(JAR.label[1]) }}>
             <span>Glimmer jar</span><span className="price">{jarBalance}</span>
           </div>
 
           {jarDelta && <span key={jarDelta.key} className="sanc-jdelta" style={at(JAR.base[0], JAR.base[1] - JAR.w * JAR.ratio * 0.95)}>{jarDelta.text}</span>}
 
-          <div className="sanc-carve is-head" style={at(GROWTH.x - 16, GROWTH.notches[2] - 60)}>Growth</div>
-          <div className="sanc-carve is-sap" style={at(GROWTH.x - 16, GROWTH.notches[2] - 44)}>{sapText}</div>
-          {GROWTH_STAGES.map((stage, i) => (
-            <div key={stage.id} className={`sanc-carve ${i === stageIndex ? 'is-now' : i > stageIndex ? 'is-next' : ''}`} style={at(GROWTH.x + 26, GROWTH.notches[i] - 8)}>{stage.name}</div>
-          ))}
-          <div className="sanc-tour-box" data-tour="growth" style={{ left: px(GROWTH.x - 16) - 6, top: py(GROWTH.notches[2] - 60) - 6, width: Math.max(px(GROWTH.x + 26) + 62 * ts, px(GROWTH.x - 16) + 92 * ts) - px(GROWTH.x - 16) + 12, height: py(GROWTH.bottom) - py(GROWTH.notches[2] - 60) + 12 }} />
-          <div className="sanc-tour-box" data-tour="lanterns" style={{ left: px(140), top: py(100), width: 416 * S, height: 222 * S }} />
+          {/* Growth: one carved mark at the head of the groove */}
+          <div className="sanc-carve is-mark" style={at(GROWTH.x - 16, GROWTH.notches[2] - 44)}>
+            {stage.name}<em>{next ? `${Math.max(1, Math.ceil(toNext))}\u2009h to ${next.name}` : `${Math.round(stats.sap)}\u2009h`}</em>
+          </div>
+          <div className="sanc-tour-box" data-tour="lanterns" style={{ left: px(140), top: py(100), width: 416 * S, height: 370 * S }} />
+          {/* The shelf and the groove, widened to take in the fixed-size jar label and growth mark */}
+          <div className="sanc-tour-box" data-tour="growth" style={{ left: Math.min(px(350), px(JAR.label[0]) - 64 * ts), top: py(380), width: Math.max(px(650), px(GROWTH.x - 16) + 170 * ts) - Math.min(px(350), px(JAR.label[0]) - 64 * ts), height: 280 * S }} />
 
-          {/* Energy: a wooden plank hanging under the lanterns */}
-          <div className="sanc-sign" style={{ left: signLeft, top: signTop }} aria-label={`Energy ${stats.energy} of 100, ${LABELS[stats.energyState]}`}>
+          {/* Today: a wooden plank hanging under the lanterns */}
+          <div className="sanc-sign" style={{ left: signLeft, top: signTop }} aria-label={focusMin ? `${hm(focusMin)} of focus today` : 'No focus yet today'}>
             <i className="twine" /><i className="nail" />
-            <div className="r1"><span>Energy</span><span className="note">{litCount} of 5 lit</span></div>
-            <div className="r2"><b>{LABELS[stats.energyState]}</b><span className="num"><em>{stats.energy}</em> / 100</span></div>
-            <div className="tally">
-              {LAMPS.map((_, i) => <i key={i} style={{ '--f': lit(i).toFixed(2) } as CSSProperties} />)}
-              <span className="t">resets 6 AM</span>
-            </div>
+            <div className={`line ${focusMin ? '' : 'is-empty'}`}><b>{focusMin ? hm(focusMin) : 'Nothing yet'}</b><span>today</span></div>
           </div>
-
-          {/* Today: a chalk slate leaning on the window rim */}
-          <div className="sanc-slate" style={{ left: slateLeft, top: slateTop }}>
-            <div className="t"><span>Today</span><span>{date}</span></div>
-            <div className="g">
-              <div><b key={`a${tickTasks}`} className={tickTasks ? 'tick' : ''}>{stats.today.tasksDone}</b><span>{plural(stats.today.tasksDone, 'task done', 'tasks done')}</span></div>
-              <div>
-                <b key={`b${tickFocus}`} className={tickFocus ? 'tick' : ''}><Duration minutes={focusMin} /></b>
-                <span>focus</span>
-              </div>
-              <div><b key={`c${tickBreaks}`} className={tickBreaks ? 'tick' : ''}><Duration minutes={breakMin} /></b><span>breaks</span></div>
-              <div><b key={`d${tickDays}`} className={tickDays ? 'tick' : ''}>{stats.today.focusDaysKept}</b><span>{plural(stats.today.focusDaysKept, 'focus day kept', 'focus days kept')}</span></div>
-            </div>
-          </div>
-
-          <button
-            className={`sanc-tag ${browse ? 'is-on' : ''}`}
-            style={{ left: clamp(px(470), EDGE + 70, W - EDGE - 70), top: py(548) }}
-            onClick={(event) => { event.stopPropagation(); setBrowse((value) => !value) }}
-            aria-pressed={browse}
-            title={browse ? 'Hide the names of keepsakes still to buy' : 'Show every keepsake’s name and price'}
-          >
-            Keepsakes · <b>{ownedCount} of {KEEPSAKES.length}</b>
-          </button>
 
           <div ref={clampRef('away')} data-x={px(300)} className="sanc-away" style={{ top: py(832) }} aria-hidden={!cinderAway}>Cinder is with you on the stopwatch</div>
 
           {/* Cinder: asleep on the moss bed, or awake under the lanterns */}
-          <div className={`sanc-buddy sanc-cinder is-${cinderPose}`} style={{ left: px(cinder.feet[0]) - CW / 2, top: py(cinder.feet[1]) - CH }} aria-hidden="true">
+          <div className={`sanc-buddy sanc-cinder is-${cinderPose} ${buddyClass('cinder')}`} style={{ left: px(cinderBase.feet[0]) - CW / 2, top: py(cinderBase.feet[1]) - CH, '--lean': hover?.lean ?? 0 } as CSSProperties}>
             <div className="spill" />
             <div className="shadow" />
-            <div className="rig"><div className="breath">
-              {(['asleep', 'awake'] as const).map((pose) => {
+            <div className="rig"><div className="jump"><div className="breath">
+              {(['asleep', 'awake', 'cheer'] as const).map((pose) => {
                 const sprite = CINDER[pose]
                 const height = sprite.height
-                return <img key={pose} className={`sp ${pose === cinderPose ? 'is-on' : ''}`} src={sprite.src} alt="" draggable={false} style={{ height, width: height * sprite.w / sprite.h }} />
+                return <img key={pose} className={`sp ${pose === cinderShown ? 'is-on' : ''}`} src={sprite.src} alt="" draggable={false} style={{ height, width: height * sprite.w / sprite.h }} />
               })}
               <div className="ember" style={{ left: (CW - cWd) / 2 + cinder.ember[0] * cWd, top: CH - cH + cinder.ember[1] * cH }} />
               <div className={`light ${cinderPose === 'awake' ? 'is-on' : ''}`} style={{ left: (CW - cWd) / 2 + cinder.light[0] * cWd, top: CH - cH + cinder.light[1] * cH }} />
-            </div></div>
+              <div className="sanc-motes" style={{ left: (CW - cWd) / 2 + cinder.light[0] * cWd, top: CH - cH + cinder.light[1] * cH }}>
+                {SPARKS.map((style, i) => <i key={i} style={style} />)}
+              </div>
+            </div></div></div>
+            {!cinderAway && (
+              <button
+                className="sanc-poke"
+                style={{ width: cinderBase.height * cinderBase.w / cinderBase.h * 0.72, height: cinderBase.height * 0.96 }}
+                aria-label="Cinder"
+                aria-describedby="cinder-bubble"
+                onClick={() => pokeBuddy('cinder')}
+                onPointerMove={leanAt('cinder')}
+                onPointerLeave={unlean('cinder')}
+              />
+            )}
           </div>
 
           {/* Hearth */}
-          <div className={`sanc-buddy sanc-hearth ${cheer ? 'is-cheer' : ''}`} style={{ left: px(HEARTH_FEET[0]) - BW / 2, top: py(HEARTH_FEET[1]) - BH }} aria-hidden="true">
+          <div className={`sanc-buddy sanc-hearth ${buddyClass('hearth')}`} style={{ left: px(HEARTH_FEET[0]) - BW / 2, top: py(HEARTH_FEET[1]) - BH, '--lean': hover?.lean ?? 0 } as CSSProperties}>
             <div className="wall" />
             <div className="backlight" />
             <div className="spill" />
             <div className="shadow" />
-            <div className="rig"><div className="sway"><div className="breath">
+            <div className="rig"><div className="jump"><div className="sway"><div className="breath">
               {hearthSet.map((sprite) => {
                 const height = spriteHeight(sprite)
-                return <img key={sprite.src} className={`sp ${sprite === hearth ? 'is-on' : ''}`} src={sprite.src} alt="" draggable={false} style={{ height, width: height * sprite.w / sprite.h }} />
+                return <img key={sprite.src} className={`sp ${sprite.src === hearthShown.src ? 'is-on' : ''}`} src={sprite.src} alt="" draggable={false} style={{ height, width: height * sprite.w / sprite.h }} />
               })}
               <div className="ember" ref={emberRef} style={emberStyle} />
-            </div></div></div>
+              <div className="sanc-motes" style={{ left: (BW - hW) / 2 + hearth.buds[0] * hW, top: BH - hH + hearth.buds[1] * hH }}>
+                {SPORES.map((style, i) => <i key={i} style={style} />)}
+              </div>
+            </div></div></div></div>
             <div className="orbit">
               {ORBIT.map((spark, i) => <i key={i} style={{ '--r': `${spark.r.toFixed(0)}px`, '--d': `${spark.d.toFixed(1)}s`, '--o': `${spark.o.toFixed(1)}s` } as CSSProperties} />)}
             </div>
+            <button
+              className="sanc-poke"
+              style={{ width: hW * 0.72, height: hH * 0.96 }}
+              aria-label="Hearth"
+              aria-describedby="hearth-bubble"
+              onClick={() => pokeBuddy('hearth')}
+              onPointerMove={leanAt('hearth')}
+              onPointerLeave={unlean('hearth')}
+            />
           </div>
+
+          {/* What a buddy says when clicked: a parchment slip beside its head */}
+          {(['hearth', 'cinder'] as const).map((who) => (
+            <div key={who} id={`${who}-bubble`} ref={bubbleRef(who)} className={`sanc-bubble ${bubbles[who].on ? 'is-on' : ''}`} role="status">
+              <i /><i /><span>{bubbles[who].text}</span>
+            </div>
+          ))}
 
           <canvas ref={canvasRef} className="sanc-canvas" aria-hidden="true" />
         </div>
@@ -761,14 +867,14 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPage
           <div className="desc">{card.description}</div>
           <div className={`foot ${!cardOwned && stats.balance < card.price ? 'is-wrap' : ''}`}>
             {cardOwned ? <>
-              <span className="price">{card.price ? `${card.price} glimmers` : 'Starter'}</span>
+              <span className={`price ${card.price ? '' : 'is-plain'}`}>{card.price ? `${card.price} glimmers` : 'Here from the start'}</span>
               <span className="owned"><i><svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7" /></svg></i>Owned</span>
             </> : stats.balance >= card.price ? <>
               <span className="price">{card.price} glimmers</span>
               <button className="buy" onClick={() => buy(card.id)} tabIndex={openId ? 0 : -1}>Buy for {card.price}</button>
             </> : <>
               <span className="price">{card.price} glimmers</span>
-              <span className="short">Not enough glimmers · {card.price - stats.balance} more</span>
+              <span className="short">{card.price - stats.balance} more · {hm((card.price - stats.balance) * GLIMMER_MINUTES)} of focus</span>
             </>}
           </div>
         </div>
@@ -777,12 +883,4 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy }: SanctuaryPage
       </div>
     </main>
   )
-}
-
-// 2h, 2h 15m or 15m, with the units small: the chalk numbers are the hero.
-function Duration({ minutes }: { minutes: number }) {
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  if (hours === 0) return <>{rest}<small>m</small></>
-  return <>{hours}<small>h</small>{rest > 0 && <>{'\u2009'}{rest}<small>m</small></>}</>
 }

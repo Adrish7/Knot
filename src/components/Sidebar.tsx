@@ -34,11 +34,12 @@ interface SidebarProps {
   onExport?: () => void
   onImport?: () => void
   updates: UpdateApi
-  buddy: { state: EnergyState; stage: GrowthStage }
+  buddy: { state: EnergyState; stage: GrowthStage; here: boolean } // here: the Sanctuary is open
+  onBuddy: () => void
   onShowWhatsNew: () => void
 }
 
-export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport, updates, buddy, onShowWhatsNew }: SidebarProps) {
+export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport, updates, buddy, onBuddy, onShowWhatsNew }: SidebarProps) {
   const [editingListId, setEditingListId] = useState<string | null>(null)
   const [draftListName, setDraftListName] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -174,7 +175,7 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
           <Timer />
           {!collapsed && <><span>Time today</span><span className="nav-count">{todayLabel}</span></>}
         </button>
-        {!collapsed && <HearthBadge state={buddy.state} stage={buddy.stage} cheer={cheer} onClick={() => onSelect('sanctuary')} />}
+        {!collapsed && <HearthBadge state={buddy.state} stage={buddy.stage} here={buddy.here} cheer={cheer} onClick={onBuddy} />}
       </div>
 
       {updates.update && <UpdateButton collapsed={collapsed} updates={updates} />}

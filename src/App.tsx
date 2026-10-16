@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, CircleHelp, FolderOpen, Inbox, MoonStar, Pencil, Search, Sparkle, Star, Sun, Timer, Trash2 } from 'lucide-react'
+import { CalendarDays, CheckCircle2, CircleHelp, FolderOpen, Inbox, MoonStar, Pencil, Search, Star, Sun, Timer, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Board } from './components/Board'
 import { CalendarPage } from './components/CalendarPage'
@@ -226,7 +226,7 @@ function App() {
     return () => { if (awake) window.knot?.keepAwake?.(false).catch(() => {}) }
   }, [anyRunning, selectedView])
 
-  // The Sanctuary's figures follow the clock while a stopwatch runs (energy rises as you work).
+  // The Sanctuary's figures follow the clock while a stopwatch runs (the lanterns fill as you work).
   const sanctuaryNow = useNow(anyRunning, 30_000)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const sanctuary = useMemo(() => sanctuaryStats(data, sanctuaryNow), [data, sanctuaryNow, clockTick])
@@ -242,6 +242,9 @@ function App() {
     setData((current) => ({ ...current, sanctuary: { ...current.sanctuary, keepsakes: [...current.sanctuary.keepsakes, id], spent: current.sanctuary.spent + keepsake.price } }))
     return true
   }
+  // Hearth's face in the sidebar opens the Sanctuary; while it is open, a click pokes the Hearth in the scene.
+  const [hearthPoke, setHearthPoke] = useState(0)
+
   // The What's new walkthrough: once after updating, and again from Settings or the Sanctuary.
   const [tour, setTour] = useState<{ step: number; returnTo: ViewId } | null>(null)
   const openTour = () => setTour({ step: 0, returnTo: selectedView })
@@ -308,6 +311,7 @@ function App() {
   const completedTasks = useMemo(() => data.tasks.filter((task) => task.listId !== null && task.completed), [data.tasks])
   const doneCounts = useMemo(() => completedTasks.reduce<Record<string, number>>((counts, task) => { if (task.listId) counts[task.listId] = (counts[task.listId] ?? 0) + 1; return counts }, {}), [completedTasks])
   const searching = Boolean(query.trim())
+  const sanctuaryOpen = selectedView === 'sanctuary' && !searching
   const activeListId = selectedView.startsWith('list:') ? selectedView.slice(5) : null
   const activeList = sortedLists.find((list) => list.id === activeListId)
 
@@ -888,7 +892,8 @@ function App() {
           onExport={window.knot ? exportData : undefined}
           onImport={window.knot ? importData : undefined}
           updates={updates}
-          buddy={{ state: sanctuary.energyState, stage: sanctuary.growth.stage.id }}
+          buddy={{ state: sanctuary.energyState, stage: sanctuary.growth.stage.id, here: sanctuaryOpen }}
+          onBuddy={() => { if (sanctuaryOpen) setHearthPoke((n) => n + 1); else { setSelectedView('sanctuary'); setQuery(''); setQuickAddListId(null) } }}
           onShowWhatsNew={openTour}
         />
         <section className="workspace">
@@ -903,12 +908,11 @@ function App() {
             onRenameTitle={!searching && activeList ? (name) => renameListById(activeList.id, name) : undefined}
             aside={selectedView === 'sanctuary' && !searching ? <>
               <button className="icon-button" onClick={openTour} title="What’s new" aria-label="What’s new"><CircleHelp size={16} /></button>
-              <span className="sanctuary-glimmers" data-tour="glimmers" title="Glimmers to spend on keepsakes"><Sparkle size={13} />{sanctuary.balance} glimmers</span>
             </> : undefined}
           />
           {selectedView === 'completed' ? <Completed tasks={completedTasks} lists={sortedLists} onOpen={setSelectedTaskId} onReopen={(taskId) => completeTask(taskId, false)} onDelete={deleteTask} onSetTimeSpent={adjustStopwatch} onStopwatch={openStopwatchFor} onClear={clearCompleted} />
             : selectedView === 'trash' ? <Trash entries={data.trash} onRestore={restoreTask} onPurge={purgeTask} onEmpty={emptyTrash} />
-            : selectedView === 'sanctuary' && !searching ? <SanctuaryPage stats={sanctuary} state={data.sanctuary} cinderAway={anyRunning} onBuy={buyKeepsake} />
+            : selectedView === 'sanctuary' && !searching ? <SanctuaryPage stats={sanctuary} state={data.sanctuary} cinderAway={anyRunning} onBuy={buyKeepsake} poke={hearthPoke} />
             : selectedView === 'stopwatch' && !searching ? <StopwatchPage
               tasks={data.tasks}
               lists={sortedLists}

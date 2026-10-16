@@ -22,27 +22,23 @@ export interface TourStep {
 export const WHATS_NEW: TourStep[] = [
   {
     view: null, target: 'sanctuary-nav', title: 'Sanctuary', sides: ['right'], pad: 4, radius: 8, art: true,
-    body: 'A new row in the sidebar. The Sanctuary is a tree hollow that shows today’s work and the long run. It fills on its own from the stopwatch, finished tasks and focus days; there is nothing in it to keep up with.',
+    body: 'A tree hollow that fills from your focus time. There is nothing in it to keep up with.',
   },
   {
     view: 'sanctuary', target: 'lanterns', title: 'Hearth and the lanterns', sides: ['right', 'below'], pad: 8, radius: 16,
-    body: 'Hearth keeps the hollow. The lanterns are today’s energy, 0 to 100: 0.4 per minute of focus (4 h 10 m fills it), 6 per task done, 4 per focus day kept. Every 20 lights a lantern; the next one glows as it fills. Energy resets at 6 AM.',
+    body: 'Every 45 minutes of focus lights a lantern; five is 3 h 45 m. They go out at 6 AM. Click Hearth and it says how much today has.',
   },
   {
-    view: 'sanctuary', target: 'growth', title: 'Growth', sides: ['left', 'above', 'right'], pad: 8, radius: 14,
-    body: 'Growth is the long run: one for each hour of focus and a quarter for each task done, and it never goes down. Hearth is a Sprout until 10, Hearth until 60, then Elder. The marks on the trunk show how far it has come.',
-  },
-  {
-    view: 'sanctuary', target: 'glimmers', title: 'Glimmers and keepsakes', sides: ['below', 'left', 'right'], pad: 8, radius: 14,
-    body: 'Glimmers are earned: 3 per task done, 1 per 25 minutes of focus, 5 per focus day kept. The jar on the shelf holds them. Spend them on keepsakes for the hollow; the faint ones are still to buy. Click one to see what it costs.',
+    view: 'sanctuary', target: 'growth', title: 'Growth and glimmers', sides: ['right', 'below', 'left'], pad: 8, radius: 14,
+    body: 'The marks on the trunk are the long run: your focus hours, all time. Hearth is a Sprout until 10 h, Hearth until 60 h, then Elder. Every 10 minutes also drops a glimmer in the jar; spend them on the faint keepsakes.',
   },
   {
     view: 'stopwatch', target: 'cinder', title: 'Cinder on the Stopwatch', sides: ['right', 'left', 'above'], pad: 10, radius: 16,
-    body: 'Cinder keeps the flame of focus. While a stopwatch runs it stands beside the basin, and its flame grows with the session. At 50 minutes without a break it yawns and offers one. Breaks are the gaps between sessions and time on a task tagged Break; Cinder rests with tea during both.',
+    body: 'Cinder stands beside the basin while a stopwatch runs. After 50 minutes without a break it offers one, and rests with tea on a break. Click it for the stretch so far.',
   },
   {
-    view: null, target: 'foot-buddy', title: 'The buddy in the sidebar', sides: ['right', 'above'], pad: 6, radius: '50%',
-    body: 'Hearth sits beside Time today on every page, and its look follows the day’s energy. Click it to open the Sanctuary. This tour is in the Sanctuary’s What’s new button and in Settings under Show what’s new.',
+    view: null, target: 'foot-buddy', title: 'Hearth in the sidebar', sides: ['right', 'above'], pad: 6, radius: '50%',
+    body: 'Opens the Sanctuary from any page. This tour is under ? on the Sanctuary and in Settings.',
   },
 ]
 

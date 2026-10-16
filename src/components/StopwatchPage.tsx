@@ -2,7 +2,7 @@ import { ArrowRight, Check, ChevronDown, Pause, Pencil, Play, RotateCcw, Timer }
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { sortStopwatch } from '../data'
 import { dayKeyOf, isForToday, todayKey } from '../format'
-import { focusCompanion } from '../sanctuary'
+import { focusCompanion, hoursMinutes } from '../sanctuary'
 import { breakTagOf, dayBalance, isBreakTask } from '../tags'
 import { daySeconds, daySpans, formatClock, formatSpent, hasTime, isRunning, totalSeconds } from '../time'
 import { useNow } from '../useNow'
@@ -114,6 +114,23 @@ export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, o
     return () => window.clearTimeout(timer)
   }, [cheerUntil])
   const pose = cheerUntil > now ? 'cheer' : companion.mood
+  // A click on Cinder: a short cheer while it is up, and one plain line about the stretch.
+  const [cinderSays, setCinderSays] = useState<string | null>(null)
+  const quietTimer = useRef(0)
+  useEffect(() => () => clearTimeout(quietTimer.current), [])
+  const pokeCinder = () => {
+    const mood = companion.mood
+    let line: string
+    if (mood === 'asleep') line = 'Asleep until a stopwatch runs'
+    else if (mood === 'break') line = resting ? `On a break since ${clockTime.format(resting.since)}` : 'On a break'
+    else if (!anyRunning) line = 'Paused'
+    else if (companion.unbrokenSeconds < 60) line = 'Just started'
+    else line = `${hoursMinutes(Math.floor(companion.unbrokenSeconds / 60))} without a break`
+    if (mood !== 'asleep' && mood !== 'break') setCheerUntil((until) => Math.max(until, Date.now() + 900))
+    setCinderSays(line)
+    clearTimeout(quietTimer.current)
+    quietTimer.current = window.setTimeout(() => setCinderSays(null), 2400)
+  }
   const offerBreak = companion.mood === 'tired' && now >= laterUntil
   const runningTarget = tasks.find((task) => isRunning(task.time))?.id ?? (isRunning(open) ? null : undefined)
   const takeBreak = () => {
@@ -270,7 +287,7 @@ export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, o
                 </>
               )}
           </div>
-          <Cinder className="sw-cinder" pose={pose} focus={pose === 'cheer' ? 1 : companion.focus} data-tour="cinder" />
+          <Cinder className="sw-cinder" pose={pose} focus={pose === 'cheer' ? 1 : companion.focus} line={cinderSays} onPoke={pokeCinder} data-tour="cinder" />
           {offerBreak && (
             <div className="sw-break-note" role="status">
               {Math.round(companion.unbrokenSeconds / 60)} min without a break.

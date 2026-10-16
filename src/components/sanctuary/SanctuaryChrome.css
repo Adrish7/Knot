@@ -211,14 +211,6 @@
 }
 .app-shell.is-sanctuary .page-icon { filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.5)); }
 
-/* Glimmers: a small walnut tag like the keepsakes tag, in both themes (objects carry their own ground). */
-.app-shell.is-sanctuary .sanctuary-glimmers {
-  height: 24px; padding: 0 9px 1px 7px; border-radius: 3px; gap: 5px;
-  font-family: var(--chrome-serif); font-size: 12.5px; font-weight: 500; letter-spacing: 0.01em; color: #f1e3c4;
-  background: linear-gradient(180deg, #55371e, #3b2612);
-  box-shadow: 0 0 0 1px rgba(20, 10, 4, 0.7), inset 0 1px 0 rgba(255, 220, 170, 0.18), 0 3px 8px rgba(0, 0, 0, 0.45);
-}
-.app-shell.is-sanctuary .sanctuary-glimmers svg { color: #ffc46b; filter: drop-shadow(0 0 3px rgba(255, 196, 107, 0.6)); }
 .app-shell.is-sanctuary .topbar .icon-button { color: var(--text-2); }
 .app-shell.is-sanctuary .topbar .icon-button:hover { color: var(--text); background: var(--surface-2); }
 

@@ -1,26 +1,24 @@
-import { dayKeyOf, todayKey } from './format'
+import { todayKey } from './format'
 import { dayBalance, isBreakTask } from './tags'
 import { daySpans, isRunning, totalSeconds } from './time'
 import type { KnotData, SanctuaryState, Tag, Task, TimeTrack } from './types'
 
-// The Sanctuary turns the day's work into a small world. Everything it shows is derived from data
-// Knot already keeps (stopwatch sessions, completed tasks, focus days). Only what can't be derived
+// The Sanctuary turns focus time into a small world. Everything it shows is derived from the
+// stopwatch: time on tasks that aren't tagged as a break, plus the open stopwatch. Finished tasks
+// don't count, so there is nothing to gain from splitting work into more tasks. Only what can't be derived
 // is stored: keepsakes bought, glimmers spent, the tours seen, and high-water marks so lifetime
 // figures never drop when old tasks are cleared or deleted.
 
 export type EnergyState = 'asleep' | 'stirring' | 'awake' | 'lively' | 'radiant'
 export type GrowthStage = 'sprout' | 'hearth' | 'elder'
 
-export const ENERGY_MAX = 100
-const ENERGY_PER_FOCUS_MINUTE = 0.4 // 4 h 10 m of focus fills the day on its own
-const ENERGY_PER_TASK = 6
-const ENERGY_PER_FOCUS_DAY = 4
+export const LANTERNS = 5
+export const LANTERN_MINUTES = 45 // one lantern per 45 minutes of focus today; all five at 3 h 45 m
+export const GLIMMER_MINUTES = 10 // one glimmer per 10 minutes of focus
 
-const GLIMMERS_PER_TASK = 3
-const GLIMMER_FOCUS_MINUTES = 25
-const GLIMMERS_PER_FOCUS_DAY = 5
-
-const SAP_PER_TASK = 0.25 // growth is measured in focus hours; a finished task adds a quarter hour
+// The rules the stored high-water marks were made under. Marks from older rules (which also counted
+// finished tasks and focus days) are dropped and rebuilt from focus time.
+const RULES = 2
 
 export const GROWTH_STAGES: { id: GrowthStage; name: string; from: number }[] = [
   { id: 'sprout', name: 'Sprout', from: 0 },
@@ -33,6 +31,8 @@ export const GROWTH_STAGES: { id: GrowthStage; name: string; from: number }[] = 
 export const LONG_FOCUS_SECONDS = 50 * 60
 const BREAK_GAP_SECONDS = 5 * 60
 
+// Prices are whole hours of focus at six glimmers an hour (the starter pair is free): 408 in all,
+// about 68 hours, so the hollow fills around when Hearth becomes an Elder.
 export interface Keepsake {
   id: string
   name: string
@@ -41,23 +41,23 @@ export interface Keepsake {
 }
 
 export const KEEPSAKES: Keepsake[] = [
-  { id: 'pebble', name: 'Pebble', price: 0, description: 'A smooth river stone. Here from the start.' },
-  { id: 'vase', name: 'Clay vase', price: 0, description: 'A small clay vase. Here from the start.' },
-  { id: 'sprout', name: 'Potted sprout', price: 25, description: 'A two-leaf sprout in a clay pot.' },
-  { id: 'teacup', name: 'Acorn teacup', price: 30, description: 'An acorn cup for tea on a break.' },
-  { id: 'starjar', name: 'Star jar', price: 40, description: 'A glass jar with a small star inside.' },
-  { id: 'book', name: 'Little book', price: 45, description: 'A pocket book, left open.' },
-  { id: 'mushroom', name: 'Mushroom lamp', price: 50, description: 'A toadstool that glows at night.' },
+  { id: 'pebble', name: 'Pebble', price: 0, description: 'A smooth river stone.' },
+  { id: 'vase', name: 'Clay vase', price: 0, description: 'A small clay vase.' },
+  { id: 'sprout', name: 'Potted sprout', price: 12, description: 'A two-leaf sprout in a clay pot.' },
+  { id: 'teacup', name: 'Acorn teacup', price: 18, description: 'An acorn cup for tea on a break.' },
+  { id: 'starjar', name: 'Star jar', price: 24, description: 'A glass jar with a small star inside.' },
+  { id: 'book', name: 'Little book', price: 36, description: 'A pocket book, left open.' },
+  { id: 'mushroom', name: 'Mushroom lamp', price: 48, description: 'A toadstool that glows at night.' },
   { id: 'moth', name: 'Lantern moth', price: 60, description: 'Rests on the window rim and glows after dark.' },
   { id: 'chime', name: 'Glass wind chime', price: 90, description: 'Hangs by the moon window.' },
   { id: 'telescope', name: 'Brass telescope', price: 120, description: 'Points out of the moon window.' },
 ]
 
 export const STARTER_KEEPSAKES = ['pebble', 'vase']
-export const SANCTUARY_TOUR = 'sanctuary-v1'
+export const SANCTUARY_TOUR = 'sanctuary-v2'
 
 export function emptySanctuary(): SanctuaryState {
-  return { keepsakes: [...STARTER_KEEPSAKES], spent: 0, bestGrowth: 0, bestEarned: 0, tourSeen: [] }
+  return { keepsakes: [...STARTER_KEEPSAKES], spent: 0, bestGrowth: 0, bestEarned: 0, rules: RULES, tourSeen: [] }
 }
 
 export function normalizeSanctuary(value: unknown): SanctuaryState {
@@ -70,15 +70,29 @@ export function normalizeSanctuary(value: unknown): SanctuaryState {
     : empty.keepsakes
   const amount = (input: unknown) => typeof input === 'number' && Number.isFinite(input) && input > 0 ? input : 0
   const tourSeen = Array.isArray(record.tourSeen) ? [...new Set(record.tourSeen.filter((id): id is string => typeof id === 'string'))] : []
-  return { keepsakes, spent: amount(record.spent), bestGrowth: amount(record.bestGrowth), bestEarned: amount(record.bestEarned), tourSeen }
+  // Under older rules, keep the keepsakes but start the marks and the spending afresh, so nobody
+  // ends up owing glimmers.
+  if (record.rules !== RULES) return { keepsakes, spent: 0, bestGrowth: 0, bestEarned: 0, rules: RULES, tourSeen }
+  return { keepsakes, spent: amount(record.spent), bestGrowth: amount(record.bestGrowth), bestEarned: amount(record.bestEarned), rules: RULES, tourSeen }
 }
 
-export function energyStateOf(energy: number): EnergyState {
-  if (energy <= 0) return 'asleep'
-  if (energy < 20) return 'stirring'
-  if (energy < 45) return 'awake'
-  if (energy < 80) return 'lively'
+// Hearth's mood follows the lanterns: asleep until the first minute of focus, stirring until a
+// lantern is lit, then awake (1–2 lit), lively (3–4) and radiant (all five).
+export function energyStateOf(focusSeconds: number, lanterns: number): EnergyState {
+  if (focusSeconds < 60) return 'asleep'
+  if (lanterns === 0) return 'stirring'
+  if (lanterns <= 2) return 'awake'
+  if (lanterns < LANTERNS) return 'lively'
   return 'radiant'
+}
+
+// How the Sanctuary and its buddies write a span of time: 2 h 20 m, 2 h, 45 m, with a thin space
+// between each number and its unit.
+export function hoursMinutes(minutes: number) {
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  if (hours === 0) return `${rest}\u2009m`
+  return rest ? `${hours}\u2009h ${rest}\u2009m` : `${hours}\u2009h`
 }
 
 export function stageOf(sap: number) {
@@ -92,48 +106,39 @@ export function stageOf(sap: number) {
 }
 
 export interface SanctuaryStats {
-  energy: number
   energyState: EnergyState
   lanterns: number // fully lit, 0..5
   partial: number // the next lantern's glow, 0..1
-  today: { tasksDone: number; focusSeconds: number; breakSeconds: number; focusDaysKept: number }
-  sap: number // lifetime focus hours plus task credit, never lower than the stored mark
+  nextLanternSeconds: number // focus still needed to light the next lantern; 0 when all are lit
+  today: { focusSeconds: number; breakSeconds: number }
+  sap: number // lifetime focus hours, never lower than the stored mark
   growth: ReturnType<typeof stageOf>
   earned: number
   balance: number
   derived: { sap: number; earned: number } // before the high-water marks, for updating them
 }
 
-function completedOn(task: Task, day: string) {
-  return task.completed && task.completedAt !== null && dayKeyOf(new Date(task.completedAt)) === day
-}
-
 export function sanctuaryStats(data: KnotData, now = Date.now()): SanctuaryStats {
   const day = todayKey()
   const balance = dayBalance(data.tasks, data.stopwatch, data.tags, day, now)
-  const tasksDone = data.tasks.filter((task) => completedOn(task, day)).length
-  const focusDaysKept = data.tasks.filter((task) => task.focusStatus[day] === 'done').length
-  const energy = Math.min(ENERGY_MAX, Math.round(balance.work / 60 * ENERGY_PER_FOCUS_MINUTE + tasksDone * ENERGY_PER_TASK + focusDaysKept * ENERGY_PER_FOCUS_DAY))
+  const lanternSeconds = LANTERN_MINUTES * 60
+  const fullSeconds = LANTERNS * lanternSeconds
+  const todaySeconds = Math.min(balance.work, fullSeconds)
+  const lanterns = Math.floor(todaySeconds / lanternSeconds)
 
   let focusSeconds = totalSeconds(data.stopwatch, now)
-  let completed = 0
-  let keptDays = 0
-  for (const task of data.tasks) {
-    if (!isBreakTask(task, data.tags)) focusSeconds += totalSeconds(task.time, now)
-    if (task.completed) completed += 1
-    keptDays += Object.values(task.focusStatus).filter((status) => status === 'done').length
-  }
-  const derivedSap = focusSeconds / 3600 + completed * SAP_PER_TASK
-  const derivedEarned = completed * GLIMMERS_PER_TASK + Math.floor(focusSeconds / 60 / GLIMMER_FOCUS_MINUTES) + keptDays * GLIMMERS_PER_FOCUS_DAY
+  for (const task of data.tasks) if (!isBreakTask(task, data.tags)) focusSeconds += totalSeconds(task.time, now)
+  const derivedSap = focusSeconds / 3600
+  const derivedEarned = Math.floor(focusSeconds / 60 / GLIMMER_MINUTES)
   const sap = Math.max(derivedSap, data.sanctuary.bestGrowth)
   const earned = Math.max(derivedEarned, data.sanctuary.bestEarned)
 
   return {
-    energy,
-    energyState: energyStateOf(energy),
-    lanterns: Math.floor(energy / 20),
-    partial: energy >= ENERGY_MAX ? 0 : (energy % 20) / 20,
-    today: { tasksDone, focusSeconds: balance.work, breakSeconds: balance.breaks, focusDaysKept },
+    energyState: energyStateOf(balance.work, lanterns),
+    lanterns,
+    partial: lanterns >= LANTERNS ? 0 : (todaySeconds % lanternSeconds) / lanternSeconds,
+    nextLanternSeconds: lanterns >= LANTERNS ? 0 : lanternSeconds - (todaySeconds % lanternSeconds),
+    today: { focusSeconds: balance.work, breakSeconds: balance.breaks },
     sap,
     growth: stageOf(sap),
     earned,
