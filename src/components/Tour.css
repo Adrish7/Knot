@@ -1,0 +1,32 @@
+/* The What's new walkthrough: a dimmed window with a spotlight on one element, and a card beside it. */
+.tour { position: fixed; inset: 0; z-index: 90; }
+.tour-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.32); }
+:root[data-theme='dark'] .tour-dim { background: rgba(0, 0, 0, 0.45); }
+.tour-spot { position: absolute; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(255, 255, 255, 0.14); transition: top 260ms var(--ease), left 260ms var(--ease), width 260ms var(--ease), height 260ms var(--ease), border-radius 260ms var(--ease); pointer-events: none; }
+:root[data-theme='dark'] .tour-spot { box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+
+.tour-card { position: absolute; padding: 14px 16px 12px; border-radius: var(--r-pop); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); animation: popIn 140ms var(--ease); }
+.tour-card h2 { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: var(--text); }
+.tour-card p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.tour-card.has-art h2, .tour-card.has-art p:first-of-type { padding-right: 64px; }
+.tour-art { position: absolute; top: -18px; right: 8px; height: 72px; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.25)); pointer-events: none; }
+
+.tour-foot { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+.tour-count { margin-right: auto; font-size: 12px; font-weight: 500; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.tour-foot button { height: 26px; padding: 0 10px; border-radius: 6px; font-size: 12.5px; font-weight: 500; }
+.tour-skip { color: var(--text-2); font-size: 12px !important; }
+.tour-skip:hover { color: var(--text); }
+.tour-back { background: var(--surface-2); color: var(--text); }
+.tour-back:disabled { opacity: 0.45; }
+.tour-next { background: var(--accent); color: var(--on-accent, #fff); }
+.tour-next:hover { filter: brightness(1.06); }
+
+.tour-arrow { position: absolute; width: 12px; height: 12px; background: var(--surface); transform: rotate(45deg); }
+.tour-arrow.is-right { left: -7px; border-left: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong); }
+.tour-arrow.is-left { right: -7px; border-right: 1px solid var(--border-strong); border-top: 1px solid var(--border-strong); }
+.tour-arrow.is-below { top: -7px; border-left: 1px solid var(--border-strong); border-top: 1px solid var(--border-strong); }
+.tour-arrow.is-above { bottom: -7px; border-right: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot, .tour-card { transition: none; animation: none; }
+}

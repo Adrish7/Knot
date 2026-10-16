@@ -1,4 +1,5 @@
 import { dateKey, dayKeyOf, todayDate, todayKey } from './format'
+import { emptySanctuary, normalizeSanctuary } from './sanctuary'
 import { emptyTrack, isRunning, pauseTrack, runningSince } from './time'
 import type { DeletedTask, FocusStatus, KnotData, Preferences, Recurrence, SortMode, Subtask, Tag, Task, TaskList, ThemeMode, TimeSession, TimeTrack } from './types'
 
@@ -149,6 +150,7 @@ export function createSeedData(): KnotData {
     tags: createDefaultTags(),
     trash: [],
     stopwatch: emptyTrack(),
+    sanctuary: emptySanctuary(),
     preferences: createDefaultPreferences(),
   }
 }
@@ -239,6 +241,7 @@ export function normalizeData(value: unknown): KnotData | null {
     tasks: settledTasks,
     trash: settledTrash,
     stopwatch,
+    sanctuary: normalizeSanctuary(value.sanctuary),
     preferences: {
       theme: oneOf(themes, preferences.theme, defaults.theme),
       sortMode: oneOf(sortModes, preferences.sortMode, defaults.sortMode),

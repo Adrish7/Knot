@@ -2,7 +2,7 @@ export type ThemeMode = 'light' | 'dark' | 'system'
 export type Recurrence = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly'
 export type SortMode = 'manual' | 'date' | 'starred'
 export type FocusStatus = 'done' | 'missed'
-export type ViewId = 'all' | 'today' | 'calendar' | 'starred' | 'stopwatch' | 'completed' | 'trash' | `list:${string}`
+export type ViewId = 'all' | 'today' | 'calendar' | 'starred' | 'stopwatch' | 'sanctuary' | 'completed' | 'trash' | `list:${string}`
 
 export interface TaskList {
   id: string
@@ -74,6 +74,15 @@ export interface Preferences {
   launchAtLogin: boolean
 }
 
+// The Sanctuary's stored state; everything else it shows is derived (see sanctuary.ts).
+export interface SanctuaryState {
+  keepsakes: string[] // ids of keepsakes owned
+  spent: number // glimmers spent on keepsakes
+  bestGrowth: number // high-water mark of lifetime growth, so clearing old tasks never shrinks it
+  bestEarned: number // high-water mark of glimmers earned
+  tourSeen: string[] // walkthroughs already shown
+}
+
 export interface KnotData {
   version: 1
   lists: TaskList[]
@@ -81,5 +90,6 @@ export interface KnotData {
   tasks: Task[]
   trash: DeletedTask[]
   stopwatch: TimeTrack // the open stopwatch, not tied to any task
+  sanctuary: SanctuaryState
   preferences: Preferences
 }

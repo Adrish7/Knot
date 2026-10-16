@@ -33,6 +33,7 @@
   --c-done: #2aa04f;
   --c-trash: #8e8e93;
   --c-timer: #0f9d8f;
+  --c-sanctuary: #c9548f;
   --danger: #e5484d;
   --on-accent: #ffffff;
 
@@ -83,6 +84,7 @@
   --c-done: #3fca6a;
   --c-trash: #98989f;
   --c-timer: #2dd4bf;
+  --c-sanctuary: #ea88bb;
   --danger: #ff6369;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.25);
@@ -874,3 +876,19 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
   .sw-row.is-running .sw-row-dot::after, .sw-band-cap::after { animation: none; opacity: 0; }
   .sw-tip { animation: none; }
 }
+
+/* Sidebar foot: Time today and Hearth's badge, which opens the Sanctuary. */
+.sidebar-total-row { position: relative; display: flex; align-items: center; }
+.sidebar-total-row .sidebar-total { flex: 1; min-width: 0; }
+.sidebar-total-row .sidebar-total .nav-count { margin-right: 34px; }
+.hearth-badge { position: absolute; right: 8px; top: 50%; width: 28px; height: 28px; margin-top: -14px; overflow: hidden; border-radius: 50%; background: color-mix(in srgb, var(--c-sanctuary) 10%, var(--surface-2)); box-shadow: inset 0 0 0 0.5px var(--border-strong); transition: transform 160ms var(--ease), box-shadow 160ms var(--ease); }
+.hearth-badge:hover { transform: scale(1.06); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-sanctuary) 60%, transparent); }
+.hearth-badge img { position: absolute; max-width: none; opacity: 0; transition: opacity 500ms var(--ease); pointer-events: none; }
+.hearth-badge img.is-on { opacity: 1; }
+.hearth-badge.is-asleep img { filter: saturate(0.85) brightness(0.92); }
+.hearth-badge.is-cheer { animation: hearth-badge-bounce 700ms var(--ease) 1; }
+@keyframes hearth-badge-bounce { 30% { transform: translateY(-3px); } 60% { transform: translateY(1px); } }
+.sidebar.is-collapsed .hearth-badge { display: none; }
+@media (prefers-reduced-motion: reduce) { .hearth-badge, .hearth-badge img { transition: none; animation: none; } }
+.sanctuary-glimmers { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.sanctuary-glimmers svg { color: var(--c-sanctuary); fill: currentColor; }

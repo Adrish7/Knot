@@ -1,13 +1,15 @@
-import { CalendarDays, CheckCircle2, FolderOpen, Inbox, Pencil, Search, Star, Sun, Timer, Trash2 } from 'lucide-react'
+import { CalendarDays, CheckCircle2, CircleHelp, FolderOpen, Inbox, MoonStar, Pencil, Search, Sparkle, Star, Sun, Timer, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Board } from './components/Board'
 import { CalendarPage } from './components/CalendarPage'
 import { Completed } from './components/Completed'
 import { Header } from './components/Header'
 import { ConfirmModal, CreateListModal, RenameListModal } from './components/Modal'
+import { SanctuaryPage } from './components/sanctuary/SanctuaryPage'
 import { Sidebar } from './components/Sidebar'
 import { StopwatchPage } from './components/StopwatchPage'
 import { TaskPanel } from './components/TaskPanel'
+import { Tour, WHATS_NEW } from './components/Tour'
 import { ListRing, listProgress } from './components/ListRing'
 import { TagsContext, type TagsApi } from './components/Tags'
 import { Trash } from './components/Trash'
@@ -15,6 +17,7 @@ import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sor
 import { dateKey, dayKeyOf, isForToday, parseDateKey, todayDate, todayKey } from './format'
 import { useNow } from './useNow'
 import { useUpdate } from './useUpdate'
+import { KEEPSAKES, SANCTUARY_TOUR, raisedMarks, sanctuaryStats } from './sanctuary'
 import { dayBalance, sortTags } from './tags'
 import { emptyTrack, formatSpent, isRunning, mergeTracks, pauseTrack, setTotalSeconds, startTrack, totalSeconds } from './time'
 import type { DeletedTask, FocusStatus, KnotData, Tag, Task, TaskList, ThemeMode, TimeTrack, ViewId } from './types'
@@ -223,6 +226,39 @@ function App() {
     return () => { if (awake) window.knot?.keepAwake?.(false).catch(() => {}) }
   }, [anyRunning, selectedView])
 
+  // The Sanctuary's figures follow the clock while a stopwatch runs (energy rises as you work).
+  const sanctuaryNow = useNow(anyRunning, 30_000)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sanctuary = useMemo(() => sanctuaryStats(data, sanctuaryNow), [data, sanctuaryNow, clockTick])
+  useEffect(() => {
+    if (!hydrated) return
+    const raised = raisedMarks(data.sanctuary, sanctuary)
+    if (raised) setData((current) => ({ ...current, sanctuary: { ...current.sanctuary, bestGrowth: Math.max(current.sanctuary.bestGrowth, raised.bestGrowth), bestEarned: Math.max(current.sanctuary.bestEarned, raised.bestEarned) } }))
+  }, [hydrated, sanctuary, data.sanctuary])
+
+  const buyKeepsake = (id: string) => {
+    const keepsake = KEEPSAKES.find((item) => item.id === id)
+    if (!keepsake || data.sanctuary.keepsakes.includes(id) || sanctuary.balance < keepsake.price) return false
+    setData((current) => ({ ...current, sanctuary: { ...current.sanctuary, keepsakes: [...current.sanctuary.keepsakes, id], spent: current.sanctuary.spent + keepsake.price } }))
+    return true
+  }
+  // The What's new walkthrough: once after updating, and again from Settings or the Sanctuary.
+  const [tour, setTour] = useState<{ step: number; returnTo: ViewId } | null>(null)
+  const openTour = () => setTour({ step: 0, returnTo: selectedView })
+  const closeTour = () => {
+    if (tour) setSelectedView(tour.returnTo)
+    setTour(null)
+    markTourSeen(SANCTUARY_TOUR)
+  }
+  useEffect(() => {
+    if (!hydrated || data.sanctuary.tourSeen.includes(SANCTUARY_TOUR)) return
+    const timer = window.setTimeout(() => setTour((current) => current ?? { step: 0, returnTo: selectedView }), 700)
+    return () => window.clearTimeout(timer)
+    // Only once the saved data is in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated])
+  const markTourSeen = (id: string) => setData((current) => current.sanctuary.tourSeen.includes(id) ? current : { ...current, sanctuary: { ...current.sanctuary, tourSeen: [...current.sanctuary.tourSeen, id] } })
+
   useEffect(() => {
     if (!hydrated || !window.knot) return
     window.knot.setLaunchAtLogin(data.preferences.launchAtLogin).catch(() => showToast('Could not update the login item.'))
@@ -283,6 +319,7 @@ function App() {
     if (selectedView === 'today') return { title: 'Today', icon: <Sun />, color: 'var(--c-today)', subline: longDate.format(todayDate()), mode: 'smart' }
     if (selectedView === 'calendar') return { title: 'Calendar', icon: <CalendarDays />, color: 'var(--c-calendar)', subline: openTasksLabel(data.tasks.filter((task) => !task.completed).length), mode: 'smart' }
     if (selectedView === 'starred') return { title: 'Starred', icon: <Star fill="currentColor" />, color: 'var(--c-starred)', mode: 'smart' }
+    if (selectedView === 'sanctuary') return { title: 'Sanctuary', icon: <MoonStar />, color: 'var(--c-sanctuary)', mode: 'smart' }
     if (selectedView === 'stopwatch') {
       // Working time only; breaks (between sessions, and on break-tagged tasks) are given apart.
       const day = dayBalance(data.tasks, data.stopwatch, data.tags, todayKey(), headerNow)
@@ -851,6 +888,8 @@ function App() {
           onExport={window.knot ? exportData : undefined}
           onImport={window.knot ? importData : undefined}
           updates={updates}
+          buddy={{ state: sanctuary.energyState, stage: sanctuary.growth.stage.id }}
+          onShowWhatsNew={openTour}
         />
         <section className="workspace">
           <Header
@@ -862,9 +901,14 @@ function App() {
             showSort={page.mode !== 'smart' || selectedView === 'today' || selectedView === 'starred'}
             onSort={(sortMode) => updatePreferences({ sortMode })}
             onRenameTitle={!searching && activeList ? (name) => renameListById(activeList.id, name) : undefined}
+            aside={selectedView === 'sanctuary' && !searching ? <>
+              <button className="icon-button" onClick={openTour} title="What’s new" aria-label="What’s new"><CircleHelp size={16} /></button>
+              <span className="sanctuary-glimmers" data-tour="glimmers" title="Glimmers to spend on keepsakes"><Sparkle size={13} />{sanctuary.balance} glimmers</span>
+            </> : undefined}
           />
           {selectedView === 'completed' ? <Completed tasks={completedTasks} lists={sortedLists} onOpen={setSelectedTaskId} onReopen={(taskId) => completeTask(taskId, false)} onDelete={deleteTask} onSetTimeSpent={adjustStopwatch} onStopwatch={openStopwatchFor} onClear={clearCompleted} />
             : selectedView === 'trash' ? <Trash entries={data.trash} onRestore={restoreTask} onPurge={purgeTask} onEmpty={emptyTrash} />
+            : selectedView === 'sanctuary' && !searching ? <SanctuaryPage stats={sanctuary} state={data.sanctuary} cinderAway={anyRunning} onBuy={buyKeepsake} />
             : selectedView === 'stopwatch' && !searching ? <StopwatchPage
               tasks={data.tasks}
               lists={sortedLists}
@@ -946,6 +990,8 @@ function App() {
             <button role="menuitem" className="danger" onClick={() => deleteList(listMenu.list)}><Trash2 size={14} />Delete list</button>
           </div>
         )}
+
+        {tour && <Tour steps={WHATS_NEW} step={tour.step} onStep={(step) => setTour((current) => current && { ...current, step })} onClose={closeTour} onView={(view) => { setSelectedView(view); setQuery('') }} />}
 
         {toast && <div className="toast"><CheckCircle2 size={16} />{toast}</div>}
       </div>

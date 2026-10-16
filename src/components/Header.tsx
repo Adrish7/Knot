@@ -11,11 +11,12 @@ interface HeaderProps {
   showSort: boolean
   onSort: (value: SortMode) => void
   onRenameTitle?: (title: string) => void
+  aside?: React.ReactNode // extra controls at the right of the title row
 }
 
 const sortLabels: Record<SortMode, string> = { manual: 'My order', date: 'Due date', starred: 'Starred first' }
 
-export function Header({ title, subline, icon, color, sortMode, showSort, onSort, onRenameTitle }: HeaderProps) {
+export function Header({ title, subline, icon, color, sortMode, showSort, onSort, onRenameTitle, aside }: HeaderProps) {
   const [editingTitle, setEditingTitle] = useState(false)
   const [draftTitle, setDraftTitle] = useState('')
 
@@ -59,6 +60,7 @@ export function Header({ title, subline, icon, color, sortMode, showSort, onSort
         {subline && <span className="page-subline">{subline}</span>}
       </div>
 
+      {aside && <div className="topbar-actions">{aside}</div>}
       {showSort && (
         <div className="topbar-actions">
           <label className="select-control" title="Sort">

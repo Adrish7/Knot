@@ -22,12 +22,14 @@ Personal task manager for macOS. Electron + React + TypeScript, packaged as `/Ap
 - Native: macOS notifications, Dock badge, open at login, JSON persistence with backup, single instance, wake-to-front, export and import, daily backups, and an "Update Knot" button in the sidebar when GitHub has a newer release (downloads the DMG, replaces the app, restarts).
 - Shortcuts: ⌘K search, ⌘N new task, Esc closes layers.
 
+- Sanctuary (added 2026-10-16, to help with procrastination and burnout without turning Knot into a game): a tree-hollow page whose figures are derived from the work already tracked. Energy today (0–100, resets at 6 AM, capped so overworking earns nothing) comes from focus minutes, finished tasks and kept focus days; Growth (lifetime, never decreases) from focus hours and finished tasks; Glimmers are earned the same way and spent on keepsakes for the hollow. Hearth, the buddy, shows energy and growth; Cinder, the focus companion, stands by the stopwatch, offers a break after 50 unbroken minutes and rests on breaks. A What's new tour explains it once after updating.
+
 ## Constraints
 
 - Functionality and state logic are frozen; UI files are the redesign surface.
 - No external network in the renderer: CSP is `default-src 'self'`. Fonts must be system or bundled; nothing loads from the web. The only request is the main process's update check against the GitHub Releases API.
 - Persisted data shape is versioned (`version: 1`) and normalized on load; list colors are stored as hex, so any palette change must keep older hex values rendering.
-- Copy stays plain and utilitarian. No slogans, no greetings, no poetic microcopy.
+- Copy stays plain and utilitarian. No slogans, no greetings, no poetic microcopy. The Sanctuary page is the one place with names of creatures and objects, but its copy is still counts and plain descriptions.
 - The dev Electron instance must not be launched for verification (it adds a second Dock icon). Verify with the web build in headless Chrome.
 
 ## Platform

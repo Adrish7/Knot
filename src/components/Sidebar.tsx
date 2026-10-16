@@ -1,11 +1,13 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, CircleArrowDown, Download, Ellipsis, Inbox, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Timer, Trash2, Upload, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, CircleArrowDown, Download, Ellipsis, Inbox, MoonStar, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Timer, Trash2, Upload, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { isForToday, todayKey } from '../format'
+import { dayKeyOf, isForToday, todayKey } from '../format'
 import { dayBalance, isBreakTask } from '../tags'
 import { formatClock, formatSpent, isRunning, totalSeconds } from '../time'
 import { useNow } from '../useNow'
 import type { Task, TaskList, ThemeMode, TimeTrack, ViewId } from '../types'
 import type { UpdateApi } from '../useUpdate'
+import type { EnergyState, GrowthStage } from '../sanctuary'
+import { HearthBadge } from './sanctuary/HearthBadge'
 import { ListRing, listProgress } from './ListRing'
 import { useTags } from './Tags'
 
@@ -32,9 +34,11 @@ interface SidebarProps {
   onExport?: () => void
   onImport?: () => void
   updates: UpdateApi
+  buddy: { state: EnergyState; stage: GrowthStage }
+  onShowWhatsNew: () => void
 }
 
-export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport, updates }: SidebarProps) {
+export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport, updates, buddy, onShowWhatsNew }: SidebarProps) {
   const [editingListId, setEditingListId] = useState<string | null>(null)
   const [draftListName, setDraftListName] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -71,6 +75,18 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
   const today = dayBalance(tasks, stopwatch, tags, todayKey(), now)
   const todayLabel = formatSpent(today.work)
   const allTimeLabel = formatSpent(tasks.reduce((sum, task) => isBreakTask(task, tags) ? sum : sum + totalSeconds(task.time, now), 0) + totalSeconds(stopwatch, now))
+  // Hearth hops when a task is done, wherever it was done.
+  const doneToday = tasks.filter((task) => task.focusStatus[todayKey()] === 'done' || (task.completed && task.completedAt !== null && dayKeyOf(new Date(task.completedAt)) === todayKey())).length
+  const lastDone = useRef(doneToday)
+  const [cheer, setCheer] = useState(false)
+  useEffect(() => {
+    const more = doneToday > lastDone.current
+    lastDone.current = doneToday
+    if (!more) return
+    setCheer(true)
+    const timer = window.setTimeout(() => setCheer(false), 760)
+    return () => window.clearTimeout(timer)
+  }, [doneToday])
   const todayHint = `${today.tasks === 0 ? 'Time spent today' : `Time spent today across ${today.tasks} ${today.tasks === 1 ? 'task' : 'tasks'}`}${today.breaks >= 60 ? `, not counting ${formatSpent(today.breaks)} of breaks` : ''}`
 
   return (
@@ -93,6 +109,7 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
         <SidebarLink collapsed={collapsed} active={selectedView === 'calendar'} color="var(--c-calendar)" icon={<CalendarDays />} label="Calendar" count={0} onClick={() => onSelect('calendar')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'starred'} color="var(--c-starred)" icon={<Star fill="currentColor" />} label="Starred" count={starredCount} onClick={() => onSelect('starred')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'stopwatch'} color="var(--c-timer)" icon={<Timer />} label="Stopwatch" count={runningTrack ? <span className="nav-live"><span className="run-dot" aria-hidden="true" />{formatClock(totalSeconds(runningTrack, now))}</span> : 0} onClick={() => onSelect('stopwatch')} />
+        <SidebarLink collapsed={collapsed} active={selectedView === 'sanctuary'} color="var(--c-sanctuary)" icon={<MoonStar />} label="Sanctuary" count={0} onClick={() => onSelect('sanctuary')} data-tour="sanctuary-nav" />
       </nav>
       <nav className="secondary-nav" aria-label="Archive">
         <SidebarLink collapsed={collapsed} active={selectedView === 'completed'} color="var(--c-done)" icon={<CheckCircle2 />} label="Completed" count={completedCount} onClick={() => onSelect('completed')} />
@@ -152,10 +169,13 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
 
       <div className="sidebar-divider" />
 
-      <button className="sidebar-total" onClick={() => onSelect('stopwatch')} title={`${todayHint}: ${todayLabel}. All time: ${allTimeLabel}. Opens the stopwatch.`} aria-label={`Time today: ${todayLabel}. Open the stopwatch`}>
-        <Timer />
-        {!collapsed && <><span>Time today</span><span className="nav-count">{todayLabel}</span></>}
-      </button>
+      <div className="sidebar-total-row">
+        <button className="sidebar-total" onClick={() => onSelect('stopwatch')} title={`${todayHint}: ${todayLabel}. All time: ${allTimeLabel}. Opens the stopwatch.`} aria-label={`Time today: ${todayLabel}. Open the stopwatch`}>
+          <Timer />
+          {!collapsed && <><span>Time today</span><span className="nav-count">{todayLabel}</span></>}
+        </button>
+        {!collapsed && <HearthBadge state={buddy.state} stage={buddy.stage} cheer={cheer} onClick={() => onSelect('sanctuary')} />}
+      </div>
 
       {updates.update && <UpdateButton collapsed={collapsed} updates={updates} />}
 
@@ -177,6 +197,9 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
             <button className="settings-row settings-action" role="switch" aria-checked={launchAtLogin} onClick={() => onLaunchAtLogin(!launchAtLogin)}>
               <span><Power size={15} />Open at login</span>
               <span className={`switch ${launchAtLogin ? 'on' : ''}`} />
+            </button>
+            <button className="settings-row settings-action" onClick={() => { setSettingsOpen(false); onShowWhatsNew() }}>
+              <span><MoonStar size={15} />Show what’s new</span>
             </button>
             {onExport && onImport && <>
               <div className="settings-divider" />
@@ -233,9 +256,9 @@ function UpdateButton({ collapsed, updates }: { collapsed: boolean; updates: Upd
   )
 }
 
-function SidebarLink({ collapsed, active, color, icon, label, count, onClick }: { collapsed: boolean; active: boolean; color: string; icon: React.ReactNode; label: string; count: React.ReactNode; onClick: () => void }) {
+function SidebarLink({ collapsed, active, color, icon, label, count, onClick, ...rest }: { collapsed: boolean; active: boolean; color: string; icon: React.ReactNode; label: string; count: React.ReactNode; onClick: () => void; 'data-tour'?: string }) {
   return (
-    <button className={`sidebar-link ${active ? 'active' : ''}`} style={{ '--view-color': color } as React.CSSProperties} onClick={onClick} title={collapsed ? label : undefined} aria-current={active ? 'page' : undefined}>
+    <button {...rest} className={`sidebar-link ${active ? 'active' : ''}`} style={{ '--view-color': color } as React.CSSProperties} onClick={onClick} title={collapsed ? label : undefined} aria-current={active ? 'page' : undefined}>
       {icon}
       {!collapsed && <><span>{label}</span><span className="nav-count">{count || ''}</span></>}
     </button>

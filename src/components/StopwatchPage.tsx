@@ -1,10 +1,12 @@
 import { ArrowRight, Check, ChevronDown, Pause, Pencil, Play, RotateCcw, Timer } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { sortStopwatch } from '../data'
 import { dayKeyOf, isForToday, todayKey } from '../format'
+import { focusCompanion } from '../sanctuary'
 import { breakTagOf, dayBalance, isBreakTask } from '../tags'
 import { daySeconds, daySpans, formatClock, formatSpent, hasTime, isRunning, totalSeconds } from '../time'
 import { useNow } from '../useNow'
+import { Cinder } from './Cinder'
 import { DayTimeline, type TimelineSpan } from './DayTimeline'
 import { InkFace } from './ink/InkFace'
 import { QuickAdd } from './QuickAdd'
@@ -32,6 +34,7 @@ interface StopwatchPageProps {
 
 const OPEN_COLOR = 'var(--c-timer)'
 const OPEN_VALUE = '__open' // the open stopwatch in the change-task <select>
+const clockTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
 
 export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, onPause, onReset, onAdjust, onMoveOpenToTask, onOpenTask, onAddTask, onSetTags, onSetDone, onReorder }: StopwatchPageProps) {
   const { tags } = useTags()
@@ -91,6 +94,33 @@ export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, o
     .map((tag) => ({ tag, seconds: tag.isBreak ? balance.breaks : balance.byTag.get(tag.id) ?? 0 }))
     .filter((entry) => entry.seconds >= 60)
   const onBreak = targetTask !== null && running && isBreakTask(targetTask, tags)
+
+  // Cinder, the focus companion. A break taken from its offer lasts until work starts again;
+  // "Keep going" hides the offer for 25 minutes.
+  const [resting, setResting] = useState<{ target: string | null; since: number } | null>(null)
+  const [laterUntil, setLaterUntil] = useState(0)
+  const [cheerUntil, setCheerUntil] = useState(0)
+  useEffect(() => { if (anyRunning) setResting(null) }, [anyRunning])
+  const companion = focusCompanion(tasks, open, tags, now, resting !== null)
+  const doneToday = tasks.filter((task) => task.focusStatus[today] === 'done' || (task.completedAt !== null && task.completed && dayKeyOf(new Date(task.completedAt)) === today)).length
+  const lastDone = useRef(doneToday)
+  useEffect(() => {
+    if (doneToday > lastDone.current) setCheerUntil(Date.now() + 1600)
+    lastDone.current = doneToday
+  }, [doneToday])
+  useEffect(() => {
+    if (cheerUntil <= Date.now()) return
+    const timer = window.setTimeout(() => setCheerUntil(0), cheerUntil - Date.now())
+    return () => window.clearTimeout(timer)
+  }, [cheerUntil])
+  const pose = cheerUntil > now ? 'cheer' : companion.mood
+  const offerBreak = companion.mood === 'tired' && now >= laterUntil
+  const runningTarget = tasks.find((task) => isRunning(task.time))?.id ?? (isRunning(open) ? null : undefined)
+  const takeBreak = () => {
+    if (runningTarget === undefined) return
+    onPause(runningTarget)
+    setResting({ target: runningTarget, since: Date.now() })
+  }
 
   // Drag to reorder: the row the cursor would land before is the first one (skipping the dragged
   // row) whose midpoint is below the cursor; null means the end.
@@ -240,6 +270,20 @@ export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, o
                 </>
               )}
           </div>
+          <Cinder className="sw-cinder" pose={pose} focus={pose === 'cheer' ? 1 : companion.focus} data-tour="cinder" />
+          {offerBreak && (
+            <div className="sw-break-note" role="status">
+              {Math.round(companion.unbrokenSeconds / 60)} min without a break.
+              <button onClick={takeBreak}>Take a 5 min break</button>
+              <button className="is-later" onClick={() => setLaterUntil(Date.now() + 25 * 60_000)}>Keep going</button>
+            </div>
+          )}
+          {resting && !anyRunning && (
+            <div className="sw-break-note" role="status">
+              On a break since {clockTime.format(resting.since)}.
+              <button onClick={() => onStart(resting.target)}>Resume</button>
+            </div>
+          )}
         </section>
 
         <DayTimeline spans={spans} now={now} breakColor={breakTag?.color} />

@@ -1,0 +1,285 @@
+/* ------------------------------------------------------------------
+   Sanctuary: the tree hollow. One painted plate (night in dark, day in
+   light) with everything else placed on it in plate coordinates; see
+   design/mockups/v3/HUD-NOTES.md. The numbers live on objects: an energy
+   plank under the lanterns, growth marks carved in the trunk, a chalk
+   slate for today, a jar for glimmers, keepsakes round the hollow.
+------------------------------------------------------------------ */
+
+.sanctuary-page {
+  --serif: ui-serif, 'New York', 'Iowan Old Style', Georgia, serif;
+  --parch: #f1e3c4; --parch-2: rgba(241, 227, 196, 0.8); --parch-3: rgba(241, 227, 196, 0.6);
+  --amber: #ffc46b; --amber-deep: #ff9d3a;
+  --carve: 0 1px 0 rgba(0, 0, 0, 0.7), 0 0 8px rgba(0, 0, 0, 0.5);
+  /* the soft dark ground behind in-world labels, so they read on either plate */
+  --label-ground: rgba(20, 12, 6, 0.4);
+  --sanc-ease: cubic-bezier(.2, .8, .2, 1);
+  --mx: 0; --my: 0;
+
+  /* by energy: lantern/ember glow, ember scale, night dimming, plate brightness and saturation, object brightness */
+  --glow: .3; --es: .7; --dim: .5; --br: .82; --sat: .8; --aura: 0; --objb: .74; --objs: .9;
+  --shaft: #bcd2ff; --lampA: 1;
+
+  position: relative; display: flex; min-height: 0; overflow: hidden;
+}
+.sanctuary-page[data-energy='stirring'] { --glow: .5; --es: .8; --dim: .36; --br: .88; --sat: .86; --objb: .78; }
+.sanctuary-page[data-energy='awake'] { --glow: .75; --es: .92; --dim: .2; --br: .96; --sat: .94; --objb: .84; }
+.sanctuary-page[data-energy='lively'] { --glow: .95; --es: 1; --dim: .08; --br: 1; --sat: 1; --objb: .88; }
+.sanctuary-page[data-energy='radiant'] { --glow: 1.2; --es: 1.12; --dim: 0; --br: 1.04; --sat: 1.04; --aura: 1; --objb: .92; }
+:root[data-theme='light'] .sanctuary-page { --shaft: #ffe9c0; --lampA: .9; --objb: 1; --objs: 1; --label-ground: rgba(22, 13, 6, 0.52); }
+
+/* ---------- Scene ---------- */
+.sanc-scene { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; border-top: 1px solid var(--border); background: #10131a; contain: layout paint; }
+:root[data-theme='light'] .sanc-scene { background: #c9b48e; }
+.sanc-scene:not(.is-ready) .sanc-world > :not(.sanc-plate):not(.sanc-night) { visibility: hidden; }
+.sanc-world { position: absolute; inset: -10px; transform: translate(calc(var(--mx) * -7px), calc(var(--my) * -4px)); transition: transform 900ms var(--sanc-ease); }
+.sanc-plate { position: absolute; inset: 0; background-position: 50% 50%; background-size: cover; background-repeat: no-repeat;
+  filter: brightness(var(--br)) saturate(var(--sat)); transition: filter 1400ms var(--sanc-ease), opacity 1200ms var(--sanc-ease); }
+.sanc-plate.is-day { opacity: 0; filter: brightness(calc(.9 + var(--br) * .1)) saturate(calc(.92 + var(--sat) * .08)); }
+:root[data-theme='light'] .sanc-plate.is-day { opacity: 1; }
+.sanc-night { position: absolute; inset: 0; pointer-events: none; opacity: var(--dim); transition: opacity 1400ms var(--sanc-ease);
+  background: linear-gradient(180deg, rgba(8, 12, 30, .5), rgba(6, 8, 20, .55)); }
+:root[data-theme='light'] .sanc-night { background: linear-gradient(180deg, rgba(120, 110, 140, .3), rgba(90, 84, 110, .3)); }
+.sanc-scrim { position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, transparent 76%, rgba(6, 8, 14, .5) 100%), radial-gradient(120% 95% at 50% 45%, transparent 62%, rgba(4, 6, 12, .3) 100%); }
+:root[data-theme='light'] .sanc-scrim { background: linear-gradient(180deg, transparent 78%, rgba(30, 24, 16, .5) 100%), radial-gradient(120% 95% at 50% 45%, transparent 66%, rgba(30, 24, 16, .22) 100%); }
+.sanc-fx { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: hidden; pointer-events: none; }
+.sanc-fx-light { mix-blend-mode: screen; }
+.sanc-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.sanc-tour-box { position: absolute; pointer-events: none; }
+
+/* Lanterns: the painted ones are the meter; light is drawn over them */
+.sanc-lamp * { transition: opacity 1100ms var(--sanc-ease); }
+.sanc-lamp .wall, .sanc-lamp .halo { opacity: calc(var(--lit, 0) * var(--lampA, 1)); }
+.sanc-lamp .glass { opacity: calc(min(1, var(--lit, 0) * 2.4) * var(--lampA, 1)); }
+.sanc-lamp .flame, .sanc-lamp .core { opacity: min(1, calc(var(--lit, 0) * 3)); }
+.sanc-lamp .flame { animation: sanc-flicker 3.1s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.sanc-lamp .halo { animation: sanc-breath 3.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+@keyframes sanc-flicker { 0%, 100% { transform: scale(1, 1) } 30% { transform: scale(.94, 1.06) } 60% { transform: scale(1.04, .96) } 80% { transform: scale(.98, 1.03) } }
+@keyframes sanc-breath { 50% { transform: scale(1.06) } }
+.sanc-shaft { transform-box: fill-box; transform-origin: 85% 0; animation: sanc-shaftsway 16s ease-in-out infinite alternate; }
+@keyframes sanc-shaftsway { from { transform: rotate(-.6deg); opacity: .85 } to { transform: rotate(.6deg); opacity: 1 } }
+:root[data-theme='light'] .sanc-shaft { opacity: .55; }
+.sanc-shaft-stop { stop-color: var(--shaft); }
+.sanc-keep-halo { animation: sanc-breath 5s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 50%; transition: opacity 900ms var(--sanc-ease); }
+.sanc-keep-halo.is-off { opacity: 0; }
+.sanc-sap-tip { animation: sanc-saptip 2.8s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 50% 50%; }
+@keyframes sanc-saptip { from { opacity: .7; transform: scale(.9) } to { opacity: 1; transform: scale(1.15) } }
+
+/* ---------- Keepsakes ----------
+   Flat studio renders, darkened and warmed to sit in the night, with a contact shadow. Locked ones
+   are a grey silhouette with a thin cream rim. */
+.sanc-ks { position: absolute; padding: 0; transform: translate(-50%, -100%); transition: transform 200ms var(--sanc-ease); cursor: pointer; border-radius: 6px; }
+.sanc-ks:focus-visible { outline: 2px solid rgba(255, 196, 107, .8); outline-offset: 3px; }
+.sanc-ks img { display: block; position: relative; width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; transition: filter 900ms var(--sanc-ease), opacity 900ms var(--sanc-ease); }
+.sanc-ks .shadow, .sanc-jar .shadow { position: absolute; left: 10%; right: 10%; bottom: -3%; height: 12%; border-radius: 50%; z-index: -1;
+  background: radial-gradient(ellipse at 50% 50%, rgba(8, 6, 4, .62), rgba(8, 6, 4, .25) 50%, transparent 72%); }
+.sanc-ks.is-hang .shadow { display: none; }
+.sanc-ks.is-owned img { filter: brightness(var(--objb)) saturate(var(--objs)) drop-shadow(0 3px 5px rgba(0, 0, 0, .35)); }
+.sanc-ks.is-locked img { opacity: .58; filter: grayscale(.9) brightness(.55) contrast(.85) sepia(.25) drop-shadow(0 0 1px rgba(255, 236, 205, .75)); }
+.sanc-ks.is-locked .shadow { opacity: .35; }
+.sanc-ks.is-locked:hover img, .sanc-ks.is-locked.is-open img, .sanc-ks.is-locked:focus-visible img { opacity: .72; filter: grayscale(.8) brightness(.66) contrast(.85) sepia(.3) drop-shadow(0 0 1.5px rgba(255, 236, 205, .95)); }
+:root[data-theme='light'] .sanc-ks.is-locked img { opacity: .5; filter: grayscale(1) brightness(.42) contrast(.9) drop-shadow(0 0 1px rgba(255, 250, 235, .8)); }
+:root[data-theme='light'] .sanc-ks.is-locked:hover img, :root[data-theme='light'] .sanc-ks.is-locked.is-open img { opacity: .66; filter: grayscale(1) brightness(.5) contrast(.9) drop-shadow(0 0 1.5px rgba(255, 250, 235, .95)); }
+.sanc-ks:hover, .sanc-ks.is-open { transform: translate(-50%, -100%) scale(1.03); }
+.sanc-ks.is-painted, .sanc-ks.is-painted:hover, .sanc-ks.is-painted.is-open { transform: translate(-50%, -100%); }
+.sanc-ks.is-new img { animation: sanc-wake 1400ms var(--sanc-ease) 1; }
+@keyframes sanc-wake { 0% { filter: brightness(1.8) saturate(1.3) drop-shadow(0 0 14px rgba(255, 220, 150, .9)) } 100% { filter: brightness(var(--objb)) saturate(var(--objs)) drop-shadow(0 3px 5px rgba(0, 0, 0, .35)) } }
+
+/* In-world labels: carved parchment on a soft dark ground. Locked ones are the same, a step quieter. */
+.sanc-label { position: absolute; display: flex; align-items: baseline; gap: 5px; padding: 1px 7px 2px; border-radius: 999px; white-space: nowrap; pointer-events: none;
+  transform: translate(-50%, 0) scale(var(--ts)); transform-origin: 50% 0;
+  font-family: var(--serif); font-size: 11.5px; font-weight: 500; letter-spacing: .01em; color: var(--parch-2); text-shadow: var(--carve);
+  background: var(--label-ground); box-shadow: 0 0 8px 2px var(--label-ground); transition: opacity 400ms var(--sanc-ease); }
+.sanc-label .price { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; font-size: 11px; color: var(--parch-2); font-variant-numeric: tabular-nums; }
+.sanc-label .price::before { content: ''; display: inline-block; width: 5px; height: 5px; margin-right: 3px; border-radius: 50%; background: var(--amber); opacity: .9; vertical-align: 1px; }
+.sanc-label.is-owned { color: var(--parch); }
+.sanc-label.is-quiet { opacity: 0; }
+
+/* ---------- Glimmer jar: three renders crossfaded by balance, motes on top ---------- */
+.sanc-jar { position: absolute; transform: translate(-50%, -100%); }
+.sanc-jar img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; display: block; transition: opacity 900ms var(--sanc-ease);
+  filter: brightness(var(--objb)) saturate(var(--objs)) drop-shadow(0 3px 5px rgba(0, 0, 0, .35)); }
+.sanc-jar .shadow { left: 8%; right: 8%; }
+.sanc-jar .motes { position: absolute; inset: 0; mix-blend-mode: screen; }
+.sanc-jar .motes i { position: absolute; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #fff6d8; box-shadow: 0 0 6px 2px rgba(255, 214, 140, .8);
+  animation: sanc-twinkle var(--d, 2.2s) ease-in-out infinite alternate; animation-delay: var(--o, 0s); transition: opacity 600ms var(--sanc-ease); }
+@keyframes sanc-twinkle { from { opacity: .45; transform: scale(.8) } to { opacity: 1; transform: scale(1.1) } }
+.sanc-jar .motes i[style*='opacity: 0'] { animation: none; }
+.sanc-jdelta { position: absolute; white-space: nowrap; font-family: var(--serif); font-size: 13px; font-weight: 600; color: var(--amber); text-shadow: var(--carve); opacity: 0; pointer-events: none;
+  animation: sanc-delta 1500ms var(--sanc-ease) 1; }
+@keyframes sanc-delta { 0% { opacity: 0; transform: translate(-50%, 6px) } 20% { opacity: 1 } 70% { opacity: 1; transform: translate(-50%, -14px) } 100% { opacity: 0; transform: translate(-50%, -22px) } }
+
+/* ---------- Energy: a wooden plank hanging under the lanterns ---------- */
+.sanc-sign { position: absolute; min-width: 148px; width: max-content; padding: 7px 10px 8px; white-space: nowrap; border-radius: 3px; color: var(--parch); transform-origin: 50% -16px;
+  font-size: 10.5px;
+  background: repeating-linear-gradient(177deg, rgba(255, 220, 170, .04) 0 2px, transparent 2px 7px), linear-gradient(180deg, #5c3d22, #3e2914 70%, #35230f);
+  box-shadow: 0 0 0 1px rgba(20, 10, 4, .7), inset 0 1px 0 rgba(255, 220, 170, .22), inset 0 -1px 0 rgba(0, 0, 0, .4), 0 6px 14px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .5);
+  animation: sanc-signsway 9s ease-in-out infinite alternate; }
+.sanc-sign { transform: translateX(-50%) scale(var(--ts)); }
+@keyframes sanc-signsway { from { transform: translateX(-50%) scale(var(--ts)) rotate(-.7deg) } to { transform: translateX(-50%) scale(var(--ts)) rotate(.7deg) } }
+.sanc-sign .twine { position: absolute; left: 50%; top: -17px; width: 1.5px; height: 17px; margin-left: -1px; background: linear-gradient(180deg, rgba(222, 196, 150, .6), rgba(222, 196, 150, .95)); }
+.sanc-sign .twine::before, .sanc-sign .twine::after { content: ''; position: absolute; left: 0; top: 10px; width: 1.5px; height: 14px; background: rgba(222, 196, 150, .9); transform-origin: 50% 0; }
+.sanc-sign .twine::before { transform: rotate(60deg); }
+.sanc-sign .twine::after { transform: rotate(-60deg); }
+.sanc-sign .nail { position: absolute; left: 50%; top: -20px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f4dca8, #a7813f 70%); box-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+.sanc-sign .r1 { display: flex; justify-content: space-between; align-items: baseline; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: rgba(241, 227, 196, .72); }
+.sanc-sign .r1 .note { letter-spacing: 0; text-transform: none; color: rgba(241, 227, 196, .55); font-variant-numeric: tabular-nums; }
+.sanc-sign .r2 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 3px; }
+.sanc-sign .r2 b { font-family: var(--serif); font-size: 17px; font-weight: 600; letter-spacing: -.005em; }
+.sanc-sign .r2 .num { font-size: 12.5px; color: rgba(241, 227, 196, .72); font-variant-numeric: tabular-nums; }
+.sanc-sign .r2 .num em { font-style: normal; font-weight: 600; color: var(--parch); font-size: 14px; }
+.sanc-sign .tally { display: flex; gap: 4px; margin-top: 7px; align-items: center; }
+.sanc-sign .tally i { position: relative; width: 9px; height: 12px; border-radius: 5px 5px 4px 4px; box-shadow: inset 0 0 0 1px rgba(241, 227, 196, .38); overflow: hidden; }
+.sanc-sign .tally i::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--f, 0) * 100%); background: linear-gradient(180deg, #ffe3a6, #ffb24a); transition: height 900ms var(--sanc-ease); }
+.sanc-sign .tally i::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 210, 130, .75), transparent 70%); opacity: var(--f, 0); mix-blend-mode: screen; transition: opacity 900ms var(--sanc-ease); }
+.sanc-sign .tally .t { margin-left: auto; font-size: 10.5px; color: rgba(241, 227, 196, .55); }
+
+/* ---------- Growth: height marks carved into the trunk ---------- */
+.sanc-carve { position: absolute; white-space: nowrap; pointer-events: none; transform: scale(var(--ts)); transform-origin: 0 0;
+  margin: -1px 0 0 -6px; padding: 1px 6px 2px; border-radius: 999px; background: var(--label-ground); box-shadow: 0 0 8px 2px var(--label-ground);
+  font-family: var(--serif); font-size: 11.5px; letter-spacing: .06em; color: var(--parch-2); text-shadow: var(--carve); }
+.sanc-carve.is-now { color: var(--parch); }
+.sanc-carve.is-next { color: var(--parch-3); }
+.sanc-carve.is-head { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; }
+.sanc-carve.is-sap { color: var(--amber); font-size: 12px; letter-spacing: .02em; text-shadow: 0 1px 0 rgba(0, 0, 0, .7), 0 0 10px rgba(255, 170, 80, .45); }
+:root[data-theme='light'] .sanc-carve { text-shadow: 0 1px 0 rgba(0, 0, 0, .8), 0 0 6px rgba(0, 0, 0, .6); }
+:root[data-theme='light'] .sanc-carve.is-sap { color: #ffd08a; text-shadow: 0 1px 0 rgba(0, 0, 0, .85), 0 0 6px rgba(0, 0, 0, .6); }
+
+/* ---------- Today: a chalk slate leaning on the window rim ---------- */
+.sanc-slate { position: absolute; width: 187px; padding: 9px 12px 10px; white-space: nowrap; border-radius: 2px; transform: scale(var(--ts)) rotate(-1.6deg); transform-origin: 0 0;
+  color: #f1ece0;
+  background: radial-gradient(120% 90% at 30% 20%, rgba(255, 255, 255, .06), transparent 60%), linear-gradient(160deg, #343a3c, #262b2d 60%, #202425);
+  border: 4px solid #6a4a2a; border-image: linear-gradient(180deg, #7a5631, #5a3d21) 1;
+  box-shadow: 0 0 0 1px rgba(20, 10, 4, .7), inset 0 0 0 1px rgba(0, 0, 0, .45), inset 0 0 22px rgba(0, 0, 0, .35), 0 8px 16px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .6); }
+.sanc-slate::after { content: ''; position: absolute; left: -4px; right: -4px; bottom: -11px; height: 7px; border-radius: 50%; background: radial-gradient(ellipse, rgba(0, 0, 0, .6), transparent 70%); z-index: -1; }
+.sanc-slate .t { display: flex; justify-content: space-between; font-family: var(--serif); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: rgba(241, 236, 224, .6); }
+.sanc-slate .t span:last-child { letter-spacing: 0; text-transform: none; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; color: rgba(241, 236, 224, .5); }
+.sanc-slate .g { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.sanc-slate .g div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sanc-slate .g b { font-family: var(--serif); font-size: 20px; font-weight: 600; line-height: 1; letter-spacing: -.01em; font-variant-numeric: tabular-nums; text-shadow: 0 0 6px rgba(255, 255, 255, .18); }
+.sanc-slate .g b small { font-size: 12px; font-weight: 500; margin: 0 1px; color: rgba(241, 236, 224, .75); }
+.sanc-slate .g span { font-size: 10.5px; color: rgba(241, 236, 224, .66); }
+.sanc-slate .g b.tick { animation: sanc-chalk 700ms var(--sanc-ease) 1; }
+@keyframes sanc-chalk { 0% { transform: translateY(-3px); text-shadow: 0 0 10px rgba(255, 255, 255, .6) } 100% { transform: none } }
+
+/* ---------- The keepsakes tag, hanging under the lower shelf ---------- */
+.sanc-tag { position: absolute; transform: translate(-50%, 0) scale(var(--ts)); transform-origin: 50% 0; padding: 3px 8px 4px; border-radius: 2px; white-space: nowrap; cursor: pointer;
+  font-family: var(--serif); font-size: 11px; letter-spacing: .03em; color: rgba(241, 227, 196, .8);
+  background: linear-gradient(180deg, #55371e, #3b2612); box-shadow: 0 0 0 1px rgba(20, 10, 4, .7), inset 0 1px 0 rgba(255, 220, 170, .18), 0 3px 8px rgba(0, 0, 0, .45);
+  transition: color 150ms var(--sanc-ease), background 150ms var(--sanc-ease); }
+.sanc-tag::before { content: ''; position: absolute; left: 50%; top: -16px; width: 1.5px; height: 16px; margin-left: -1px; background: rgba(222, 196, 150, .85); }
+.sanc-tag:hover { color: var(--parch); background: linear-gradient(180deg, #644226, #452c16); }
+.sanc-tag:focus-visible { outline: 2px solid rgba(255, 196, 107, .8); outline-offset: 2px; }
+.sanc-tag.is-on { color: var(--parch); box-shadow: 0 0 0 1px rgba(20, 10, 4, .7), inset 0 1px 0 rgba(255, 220, 170, .18), 0 0 0 1.5px rgba(255, 196, 107, .55), 0 3px 8px rgba(0, 0, 0, .45); }
+.sanc-tag b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ---------- Cinder's spot while it's on the stopwatch ---------- */
+.sanc-away { position: absolute; display: flex; align-items: center; gap: 6px; padding: 1px 8px 2px; border-radius: 999px; white-space: nowrap; pointer-events: none;
+  transform: translate(-50%, 0) scale(var(--ts)); transform-origin: 50% 0;
+  font-family: var(--serif); font-size: 11.5px; letter-spacing: .02em; color: var(--parch-2); text-shadow: var(--carve);
+  background: var(--label-ground); box-shadow: 0 0 8px 2px var(--label-ground); opacity: 0; transition: opacity 600ms var(--sanc-ease); }
+.sanc-away::before { content: ''; width: 5px; height: 7px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: linear-gradient(180deg, #ffd88a, #ff9d3a); box-shadow: 0 0 6px rgba(255, 170, 80, .7); opacity: .85; }
+.sanctuary-page[data-cinder='away'] .sanc-away { opacity: 1; }
+
+/* ---------- Buddies ---------- */
+.sanc-buddy { position: absolute; width: 280px; height: 320px; pointer-events: none; transform-origin: 50% 100%;
+  transform: translate(calc(var(--mx) * -5px), calc(var(--my) * -3px)) scale(var(--k)); transition: transform 900ms var(--sanc-ease); }
+.sanc-buddy .wall { position: absolute; left: 50%; top: 46%; width: 620px; height: 620px; margin: -310px 0 0 -310px; border-radius: 50%; mix-blend-mode: screen;
+  background: radial-gradient(circle, rgba(255, 186, 110, .34), rgba(255, 160, 90, .12) 38%, transparent 66%); opacity: calc(var(--glow) * .7); transition: opacity 1100ms var(--sanc-ease); }
+.sanc-buddy .spill { position: absolute; left: 50%; bottom: -34px; width: 420px; height: 110px; margin-left: -210px; border-radius: 50%; mix-blend-mode: screen;
+  background: radial-gradient(ellipse at 50% 50%, rgba(255, 200, 120, .6), rgba(255, 170, 90, .2) 42%, transparent 70%); opacity: var(--glow); transition: opacity 1100ms var(--sanc-ease); animation: sanc-pulse 2.6s ease-in-out infinite; }
+.sanc-buddy .backlight { position: absolute; left: 50%; top: 42%; width: 360px; height: 360px; margin: -180px 0 0 -180px; border-radius: 50%; mix-blend-mode: screen;
+  background: radial-gradient(circle, rgba(170, 200, 255, .22), rgba(150, 180, 255, .08) 45%, transparent 68%); }
+:root[data-theme='light'] .sanc-buddy .backlight { opacity: .4; }
+.sanc-buddy .shadow { position: absolute; left: 50%; bottom: -6px; width: 170px; height: 28px; margin-left: -85px; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 50%, rgba(10, 8, 6, .62), rgba(10, 8, 6, .3) 45%, transparent 72%); transition: transform 900ms var(--sanc-ease), opacity 900ms var(--sanc-ease); }
+.sanc-buddy .rig, .sanc-buddy .sway, .sanc-buddy .breath { position: absolute; inset: 0; transform-origin: 50% 100%; }
+.sanc-buddy .sway { animation: sanc-sway 6.4s ease-in-out infinite alternate; }
+@keyframes sanc-sway { from { transform: rotate(-.9deg) } to { transform: rotate(.9deg) } }
+.sanc-buddy .breath { animation: sanc-breathe 4.2s ease-in-out infinite; }
+@keyframes sanc-breathe { 50% { transform: scale(1.008, .985) } }
+.sanc-buddy img.sp { position: absolute; bottom: 0; left: 50%; max-width: none; transform: translateX(-50%); opacity: 0; transition: opacity 620ms var(--sanc-ease); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .28)); }
+.sanc-buddy img.sp.is-on { opacity: 1; }
+.sanc-buddy .ember, .sanc-buddy .light { position: absolute; border-radius: 50%; mix-blend-mode: plus-lighter; pointer-events: none; transition: left 620ms var(--sanc-ease), top 620ms var(--sanc-ease), opacity 620ms var(--sanc-ease); }
+.sanc-buddy .ember { width: 150px; height: 150px; margin: -75px 0 0 -75px; opacity: calc(var(--glow) * .85);
+  background: radial-gradient(circle, rgba(255, 240, 205, .9) 0%, rgba(255, 185, 95, .55) 16%, rgba(255, 130, 50, .22) 40%, transparent 66%); animation: sanc-emberpulse 2.6s ease-in-out infinite; }
+@keyframes sanc-emberpulse { 0%, 100% { transform: scale(calc(var(--es) * .96)) } 50% { transform: scale(calc(var(--es) * 1.06)) } }
+@keyframes sanc-pulse { 50% { transform: scale(1.05); opacity: calc(var(--glow) * .85) } }
+.sanc-buddy .light { width: 70px; height: 70px; margin: -35px 0 0 -35px; opacity: 0;
+  background: radial-gradient(circle, rgba(255, 246, 220, .95) 0%, rgba(255, 210, 130, .5) 25%, transparent 65%); animation: sanc-lightpulse 2.2s ease-in-out infinite; }
+.sanc-buddy .light.is-on { opacity: calc(var(--glow) * .9); }
+@keyframes sanc-lightpulse { 50% { transform: scale(1.12) } }
+.sanc-hearth.is-cheer .ember { animation: sanc-emberflare 1100ms var(--sanc-ease) 1; }
+@keyframes sanc-emberflare { 0% { transform: scale(var(--es)) } 22% { transform: scale(calc(var(--es) * 1.7)); opacity: 1 } 100% { transform: scale(var(--es)) } }
+.sanc-buddy .orbit { position: absolute; left: 50%; top: 44%; width: 0; height: 0; opacity: var(--aura); transition: opacity 1200ms var(--sanc-ease); transform: scaleY(.55); }
+.sanc-buddy .orbit i { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: #fff4d6; box-shadow: 0 0 8px 3px rgba(255, 214, 140, .85);
+  animation: sanc-orbit var(--d) linear infinite, sanc-twinkle 2.2s ease-in-out infinite alternate; animation-delay: var(--o), 0s; }
+.sanctuary-page:not([data-energy='radiant']) .sanc-buddy .orbit i { animation: none; }
+@keyframes sanc-orbit { from { transform: rotate(0deg) translateX(var(--r)) rotate(0deg) } to { transform: rotate(360deg) translateX(var(--r)) rotate(-360deg) } }
+
+/* Hearth's motion by energy */
+.sanctuary-page[data-energy='asleep'] .sanc-hearth .breath { animation-duration: 5.8s; }
+.sanctuary-page[data-energy='asleep'] .sanc-hearth .sway { animation: none; }
+.sanctuary-page[data-energy='asleep'] .sanc-hearth .shadow { transform: scale(.9, .9); }
+.sanctuary-page[data-energy='stirring'] .sanc-hearth .sway { animation: sanc-rock 4.4s ease-in-out infinite alternate; }
+@keyframes sanc-rock { from { transform: rotate(-1.6deg) } to { transform: rotate(1.6deg) } }
+.sanctuary-page[data-energy='stirring'] .sanc-hearth .breath { animation: sanc-stir 4.4s ease-in-out infinite; }
+@keyframes sanc-stir { 0%, 100% { transform: scale(1, 1) } 50% { transform: scale(1.01, .98) } 78% { transform: scale(.995, 1.02) } }
+.sanctuary-page[data-energy='lively'] .sanc-hearth .rig { animation: sanc-hopcycle 3.4s ease-in-out infinite; }
+@keyframes sanc-hopcycle { 0%, 76%, 100% { transform: translateY(0) scale(1, 1) } 80% { transform: translateY(3px) scale(1.05, .94) } 87% { transform: translateY(-13px) scale(.97, 1.04) } 94% { transform: translateY(0) scale(1.03, .96) } }
+.sanctuary-page[data-energy='lively'] .sanc-hearth .sway { animation-duration: 3.8s; }
+.sanctuary-page[data-energy='radiant'] .sanc-hearth .rig { animation: sanc-hover 4.2s ease-in-out infinite; }
+@keyframes sanc-hover { 0%, 100% { transform: translateY(-8px) } 50% { transform: translateY(-18px) } }
+.sanctuary-page[data-energy='radiant'] .sanc-hearth .shadow { transform: scale(.78); opacity: .55; }
+.sanctuary-page[data-energy='radiant'] .sanc-hearth .spill { bottom: -30px; }
+
+/* Cinder: a smaller rig, no wall wash, steady breathing */
+.sanc-cinder { width: 200px; height: 240px; transform: scale(var(--k)); transition: opacity 700ms var(--sanc-ease); }
+.sanc-cinder .spill { width: 260px; height: 70px; margin-left: -130px; bottom: -22px; opacity: calc(var(--glow) * .55); }
+.sanc-cinder .shadow { width: 120px; height: 20px; margin-left: -60px; }
+.sanc-cinder .ember { width: 110px; height: 110px; margin: -55px 0 0 -55px; opacity: calc(.45 + var(--glow) * .35); }
+.sanc-cinder .light { width: 54px; height: 54px; margin: -27px 0 0 -27px; }
+.sanc-cinder img.sp { filter: brightness(.92) drop-shadow(0 5px 8px rgba(0, 0, 0, .3)); }
+:root[data-theme='light'] .sanc-cinder img.sp { filter: drop-shadow(0 5px 8px rgba(0, 0, 0, .3)); }
+.sanc-cinder.is-asleep .breath { animation-duration: 6s; }
+.sanc-cinder.is-asleep .ember { opacity: calc(.25 + var(--glow) * .2); }
+.sanctuary-page[data-cinder='away'] .sanc-cinder { opacity: 0; }
+
+/* ---------- Keepsake card: a parchment shop tag on twine ---------- */
+.sanc-cardline { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 29; transition: opacity 180ms var(--sanc-ease); }
+.sanc-cardline line { stroke: rgba(230, 206, 160, .9); stroke-width: 1.5; stroke-linecap: round; }
+.sanc-cardline line.shade { stroke: rgba(0, 0, 0, .55); stroke-width: 3.5; }
+.sanc-card { position: absolute; z-index: 30; left: 0; top: 0; width: 237px; padding: 14px 16px; border-radius: 3px; color: #2b2114; opacity: 0; pointer-events: none; visibility: hidden;
+  transform: translateY(4px) rotate(-.6deg); transition: opacity 180ms var(--sanc-ease), transform 220ms var(--sanc-ease), visibility 0s linear 220ms;
+  background: radial-gradient(140% 100% at 20% 0%, rgba(255, 255, 255, .35), transparent 50%), radial-gradient(100% 80% at 90% 100%, rgba(150, 110, 60, .18), transparent 60%), #efe1c3;
+  box-shadow: 0 0 0 1px #b89a68, inset 0 0 0 1px rgba(255, 250, 235, .6), 0 14px 30px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .3); }
+.sanc-card.is-on { opacity: 1; pointer-events: auto; visibility: visible; transform: translateY(0) rotate(-.6deg); transition: opacity 180ms var(--sanc-ease), transform 220ms var(--sanc-ease); }
+.sanc-card .hole { position: absolute; left: 10px; top: 10px; width: 9px; height: 9px; border-radius: 50%; background: #2a2a2e; box-shadow: inset 0 1px 1px rgba(0, 0, 0, .6), 0 0 0 2.5px #d8c69d, 0 0 0 3.5px #b89a68; }
+.sanc-card .name { margin: 0 18px 0 16px; font-family: var(--serif); font-size: 16px; font-weight: 600; letter-spacing: -.005em; line-height: 1.2; }
+.sanc-card .desc { margin-top: 7px; font-size: 12.5px; line-height: 1.4; color: #5a4a30; }
+.sanc-card .foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(90, 70, 40, .35); }
+.sanc-card .foot.is-wrap { flex-wrap: wrap; }
+.sanc-card .price { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #6c5a3c; font-variant-numeric: tabular-nums; }
+.sanc-card .price::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--amber-deep); box-shadow: 0 0 4px rgba(255, 160, 70, .6); }
+.sanc-card .buy { height: 28px; padding: 0 12px; border-radius: 6px; font-size: 12.5px; font-weight: 500; color: #f4e9d2; background: #3a2816; cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 230, 190, .14), 0 1px 2px rgba(0, 0, 0, .3); transition: background 150ms var(--sanc-ease), transform 150ms var(--sanc-ease); }
+.sanc-card .buy:hover { background: #4c3520; }
+.sanc-card .buy:active { transform: translateY(1px); }
+.sanc-card .buy:focus-visible { outline: 2px solid #c98a3a; outline-offset: 2px; }
+.sanc-card .short { display: block; width: 100%; margin-top: -2px; font-size: 11.5px; color: #8a5a3a; }
+.sanc-card .owned { display: inline-flex; align-items: center; gap: 6px; font-family: var(--serif); font-size: 12px; font-weight: 600; color: #8a3b2e; }
+.sanc-card .owned i { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #c2574a, #8a3b2e 65%); box-shadow: 0 1px 2px rgba(0, 0, 0, .35), inset 0 0 0 1.5px rgba(255, 220, 200, .25); }
+.sanc-card .owned svg { width: 11px; height: 11px; fill: none; stroke: #fbe8e2; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.sanc-card .close { position: absolute; right: 8px; top: 8px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; color: #8a7652; cursor: pointer; }
+.sanc-card .close:hover { background: rgba(80, 60, 30, .1); color: #3a2816; }
+.sanc-card .close svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+/* Reward motes, flying from Hearth's chest to the jar */
+.sanc-flymote { position: absolute; z-index: 20; left: 0; top: 0; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle, #fff7df, #ffd98a 55%, rgba(255, 200, 120, 0) 75%); box-shadow: 0 0 10px 3px rgba(255, 214, 140, .7); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sanctuary-page *, .sanctuary-page *::before, .sanctuary-page *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  .sanc-world, .sanc-buddy { transition: none; }
+}

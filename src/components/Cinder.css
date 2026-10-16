@@ -1,0 +1,56 @@
+/* Cinder, the focus companion. The box's bottom-centre is its feet; poses are crossfaded inside it. */
+.cinder { position: absolute; width: 92px; height: 118px; transform: translateX(-50%); pointer-events: none; transition: height 420ms var(--ease); }
+.cinder.is-asleep, .cinder.is-break { height: 84px; }
+
+.cinder img { position: absolute; left: 50%; bottom: 0; height: 100%; transform: translateX(-50%); opacity: 0; transition: opacity 420ms var(--ease); filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.25)); user-select: none; -webkit-user-drag: none; }
+.cinder img.is-on { opacity: 1; }
+.cinder.is-asleep img { filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.25)) saturate(0.88) brightness(0.96); }
+
+/* grounding: a soft shadow under the feet, and a warm pool from the ember in the dark */
+.cinder-floor { position: absolute; left: 50%; bottom: -4px; width: 70%; height: 10px; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, 0.32), transparent); }
+:root[data-theme='dark'] .cinder-floor { background: radial-gradient(closest-side, rgba(0, 0, 0, 0.6), transparent); }
+.cinder-warm { position: absolute; left: 50%; bottom: -8px; width: 150%; height: 34px; transform: translateX(-50%); border-radius: 50%; mix-blend-mode: screen; opacity: calc(0.12 + 0.28 * var(--focus)); background: radial-gradient(closest-side, rgba(255, 176, 92, 0.55), transparent); transition: opacity 900ms var(--ease); }
+:root:not([data-theme='dark']) .cinder-warm { opacity: calc(0.06 + 0.12 * var(--focus)); }
+
+/* the flame's halo on the hood and the glow in the belly, both scaled by --focus */
+.cinder-halo, .cinder-ember { position: absolute; border-radius: 50%; mix-blend-mode: screen; transform: translate(-50%, -50%); transition: opacity 900ms var(--ease), width 900ms var(--ease), height 900ms var(--ease); }
+.cinder-halo { left: var(--tip-x); top: var(--tip-y); width: calc(18px + 24px * var(--focus)); height: calc(18px + 24px * var(--focus)); opacity: calc(0.18 + 0.42 * var(--focus)); background: radial-gradient(closest-side, rgba(255, 205, 120, 0.9), rgba(255, 150, 60, 0.45) 45%, transparent); animation: cinder-flicker 2.6s ease-in-out infinite; }
+.cinder-ember { left: 50%; top: 62%; width: calc(26px + 22px * var(--focus)); height: calc(26px + 22px * var(--focus)); opacity: calc(0.08 + 0.3 * var(--focus)); background: radial-gradient(closest-side, rgba(255, 170, 80, 0.8), transparent); }
+:root:not([data-theme='dark']) .cinder-halo { opacity: calc(0.1 + 0.35 * var(--focus)); }
+:root:not([data-theme='dark']) .cinder-ember { opacity: calc(0.04 + 0.18 * var(--focus)); }
+
+/* a wisp of steam from the tea */
+.cinder-steam { position: absolute; left: 47%; top: 46%; width: 6px; height: 16px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 255, 255, 0.5), transparent); filter: blur(1.5px); opacity: 0; animation: cinder-steam 3.8s ease-out infinite; }
+
+/* motion: breath and the flame's flicker; a single hop on a cheer */
+.cinder-rig { position: absolute; inset: 0; transform-origin: 50% 100%; animation: cinder-breathe 4.2s ease-in-out infinite; }
+.cinder.is-asleep .cinder-rig { animation-duration: 6.2s; }
+.cinder.is-break .cinder-rig { animation-duration: 5s; }
+.cinder.is-cheer .cinder-rig { animation: cinder-hop 760ms cubic-bezier(0.3, 0.9, 0.3, 1) 1; }
+.cinder.is-cheer .cinder-halo { animation: cinder-flare 1100ms var(--ease) 1; }
+@keyframes cinder-breathe { 50% { transform: scaleY(1.014) scaleX(1.006); } }
+@keyframes cinder-flicker { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 35% { transform: translate(-50%, -52%) scale(1.06); } 70% { transform: translate(-49%, -50%) scale(0.97); } }
+@keyframes cinder-hop { 30% { transform: translateY(-12px) scaleY(1.03); } 55% { transform: translateY(0) scaleY(0.97); } 72% { transform: translateY(-4px); } }
+@keyframes cinder-flare { 40% { transform: translate(-50%, -50%) scale(1.5); } }
+@keyframes cinder-steam { 0% { opacity: 0; transform: translateY(0) scaleX(1); } 25% { opacity: 0.7; } 100% { opacity: 0; transform: translateY(-18px) scaleX(1.8); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cinder, .cinder * { animation: none !important; transition: none !important; }
+}
+
+/* On the Stopwatch page: feet on the controls row's bottom edge, 40px right of the basin's rim or 40px
+   past the end of the controls row, whichever is further right. Anchor positioning does the measuring,
+   so neither the face nor the row changes. */
+.sw-stage { position: relative; }
+.sw-stage .sw-ink { anchor-name: --sw-ink; }
+.sw-stage .sw-controls { anchor-name: --sw-controls; }
+.cinder.sw-cinder { left: max(anchor(--sw-ink right) + 40px, anchor(--sw-controls right) + 40px); top: anchor(--sw-controls bottom); transform: translate(-50%, -100%); }
+@container sw (max-width: 600px) {
+  .cinder.sw-cinder { display: none; }
+}
+
+/* The offer of a break: a plain line under the controls, on the baseline Cinder stands on. */
+.sw-break-note { display: inline-flex; align-items: center; gap: 6px; height: 20px; margin-top: -8px; color: var(--text-2); font-size: 13px; line-height: 20px; animation: popIn 220ms var(--ease); }
+.sw-break-note button { height: 22px; padding: 0 7px; border-radius: var(--r-control); color: var(--accent); font-weight: 500; }
+.sw-break-note button:hover { background: var(--accent-soft); }
+.sw-break-note button.is-later { color: inherit; font-weight: 400; }
