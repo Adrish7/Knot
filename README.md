@@ -30,7 +30,7 @@ xattr -dr com.apple.quarantine /Applications/Knot.app
 
 ### Updating
 
-Knot 1.4.0 and later check for a new release when they open and every few hours. When one is out, an **Update Knot** button appears at the bottom of the sidebar. Click it and Knot downloads the new version, replaces itself and restarts. To check by hand, open Settings (the gear at the bottom of the sidebar) and click **Check for updates**.
+Knot 1.4.0 and later check for a new release when they open and every few hours. When one is out, an **Update Knot** button appears at the bottom of the sidebar. Click it and Knot downloads the new version, replaces itself and restarts. To check by hand, click the update button (the arrow in a circle) at the bottom of the sidebar, next to Settings. When a new version is out it turns blue with a dot.
 
 If Knot can't replace itself, for example because it isn't in your Applications folder, it opens the new disk image instead. Quit Knot and drag the new copy into Applications.
 

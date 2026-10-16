@@ -182,7 +182,10 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
 
       <div className="sidebar-footer" ref={footerRef}>
         <button className="new-list-button" onClick={onCreateList} title="New list"><Plus size={16} />{!collapsed && <span>New list</span>}</button>
-        <button className={`icon-button settings-button ${settingsOpen ? 'is-open' : ''}`} onClick={() => setSettingsOpen((open) => !open)} aria-label="Settings" aria-expanded={settingsOpen} aria-haspopup="dialog" title="Settings"><Settings2 size={16} /></button>
+        <div className="sidebar-footer-actions">
+          {updates.supported && <UpdateIcon updates={updates} />}
+          <button className={`icon-button settings-button ${settingsOpen ? 'is-open' : ''}`} onClick={() => setSettingsOpen((open) => !open)} aria-label="Settings" aria-expanded={settingsOpen} aria-haspopup="dialog" title="Settings"><Settings2 size={16} /></button>
+        </div>
         {settingsOpen && (
           <div className="settings-popover" role="dialog" aria-label="Settings">
             <div className="settings-label">Appearance</div>
@@ -253,6 +256,27 @@ function UpdateButton({ collapsed, updates }: { collapsed: boolean; updates: Upd
     >
       <CircleArrowDown />
       {!collapsed && <><span>{label}</span><span className="nav-count">{detail}</span></>}
+    </button>
+  )
+}
+
+// Always in the footer, so updates never hide behind Settings: it checks for a new release, and
+// when one is out it turns accent with a dot and installs it like the Update Knot row.
+function UpdateIcon({ updates }: { updates: UpdateApi }) {
+  const { update, progress, checking, version } = updates
+  const busy = Boolean(progress) || checking
+  const title = update
+    ? `Update Knot to ${update.version} and restart`
+    : checking ? 'Checking for updates…' : `${version ? `Knot ${version}. ` : ''}Check for updates`
+  return (
+    <button
+      className={`icon-button update-icon ${update ? 'has-update' : ''} ${busy ? 'is-busy' : ''}`}
+      onClick={update ? updates.install : updates.checkNow}
+      disabled={busy}
+      title={title}
+      aria-label={title}
+    >
+      <CircleArrowDown size={16} />
     </button>
   )
 }

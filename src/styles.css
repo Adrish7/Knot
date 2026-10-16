@@ -187,6 +187,13 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .new-list-button { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 6px; border-radius: 6px; color: var(--text-2); font-size: 13px; transition: background 120ms ease, color 120ms ease; }
 .new-list-button:hover { color: var(--text); background: var(--surface-2); }
 .settings-button.is-open { color: var(--text); background: var(--surface-3); }
+.sidebar-footer-actions { display: flex; align-items: center; gap: 2px; }
+.update-icon { position: relative; }
+.update-icon.has-update { color: var(--accent); }
+.update-icon.has-update::after { content: ''; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1.5px var(--sidebar-solid); }
+.update-icon.is-busy { cursor: default; }
+.update-icon.is-busy svg { animation: update-pulse 1s ease-in-out infinite alternate; }
+@keyframes update-pulse { to { opacity: 0.35; } }
 
 .settings-popover { position: absolute; z-index: 30; left: 0; right: 0; bottom: 36px; padding: 6px; border-radius: var(--r-pop); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); animation: popIn 140ms var(--ease); transform-origin: bottom right; }
 @keyframes popIn { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
@@ -223,6 +230,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .sidebar.is-collapsed .list-ring { width: 18px; height: 18px; }
 .sidebar.is-collapsed .list-more { display: none; }
 .sidebar.is-collapsed .sidebar-footer { flex-direction: column; align-items: center; }
+.sidebar.is-collapsed .sidebar-footer-actions { flex-direction: column; }
 .sidebar.is-collapsed .new-list-button { padding: 0; width: 28px; justify-content: center; }
 .sidebar.is-collapsed .settings-popover { right: auto; left: 0; width: 236px; transform-origin: bottom left; }
 
@@ -734,6 +742,7 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
   .sidebar .sidebar-link, .sidebar .list-nav-main, .sidebar .sidebar-total { justify-content: center; padding: 0; height: 34px; }
   .sidebar .sidebar-link span, .sidebar .sidebar-total span, .sidebar .list-name, .sidebar .nav-count, .sidebar .new-list-button span { display: none; }
   .sidebar .sidebar-footer { flex-direction: column; align-items: center; }
+  .sidebar .sidebar-footer-actions { flex-direction: column; }
   .sidebar .new-list-button { padding: 0; width: 28px; justify-content: center; }
   .topbar { padding-left: 24px; padding-right: 20px; }
   .focus-sheet { padding-left: 16px; padding-right: 16px; }
@@ -895,4 +904,5 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
 .app-shell.is-sanctuary .hearth-badge.is-poked { animation-name: hearth-badge-bounce, hearth-badge-ring-amber; }
 @keyframes hearth-badge-ring-amber { 0% { outline-offset: 0; outline-color: rgba(255, 196, 107, .8); } 100% { outline-offset: 8px; outline-color: transparent; } }
 .sidebar.is-collapsed .hearth-badge { display: none; }
+@media (prefers-reduced-motion: reduce) { .update-icon.is-busy svg { animation: none; opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) { .hearth-badge, .hearth-badge img, .app-shell .hearth-badge.is-poked { transition: none; animation: none; } }

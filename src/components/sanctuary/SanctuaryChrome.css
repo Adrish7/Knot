@@ -285,3 +285,6 @@
   .app-shell, .sidebar, .topbar, .sidebar::before, .topbar::before, .sidebar-search, .hearth-badge { transition-duration: 1ms !important; }
   .app-shell.is-sanctuary .sidebar::after, .app-shell.is-sanctuary .sidebar-divider::after { animation: none; filter: opacity(.6); }
 }
+
+/* The update dot's ring takes the wood's colour. */
+.app-shell.is-sanctuary .update-icon.has-update::after { box-shadow: 0 0 0 1.5px var(--chrome-wood); }
