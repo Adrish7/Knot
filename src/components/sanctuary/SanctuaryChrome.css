@@ -1,0 +1,295 @@
+/* ------------------------------------------------------------------
+   Sanctuary chrome: while the Sanctuary is the selected view the sidebar
+   and the page-title row become the inside of the hollow (walnut bark at
+   night, sunlit oak by day), so the painting is framed by wood instead
+   of by grey. Geometry is untouched; this file only paints.
+
+   Hook: `.app-shell.is-sanctuary` (added when selectedView === 'sanctuary').
+   Everything else is driven by registered custom properties that animate on
+   `.sidebar` and `.topbar`, so entering and leaving crossfade in 640ms with
+   no per-row transition conflicts (hover feedback keeps its own 120ms).
+   Imported after styles.css (src/main.tsx).
+------------------------------------------------------------------ */
+
+/* ---------- 1. Animatable tokens ----------
+   Registering the colour tokens the chrome uses lets `transition` tween
+   them; descendants inherit the in-between value each frame. */
+@property --sidebar { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --text { syntax: '<color>'; inherits: true; initial-value: #1c1c1e; }
+@property --text-2 { syntax: '<color>'; inherits: true; initial-value: #6e6e73; }
+@property --text-3 { syntax: '<color>'; inherits: true; initial-value: #8a8a8f; }
+@property --surface { syntax: '<color>'; inherits: true; initial-value: #ffffff; }
+@property --surface-2 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --surface-3 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --selection { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --border { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --border-strong { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --field { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --blue { syntax: '<color>'; inherits: true; initial-value: #2e6ff2; }
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #2e6ff2; }
+@property --accent-soft { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --accent-deep { syntax: '<color>'; inherits: true; initial-value: #2258c8; }
+/* chrome-only tokens */
+@property --chrome-wood { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --chrome-badge-bg { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --chrome-badge-ring { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --chrome-skin { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --chrome-fireflies { syntax: '<number>'; inherits: true; initial-value: 0; }
+
+/* ---------- 2. Unscoped: transitions and layers that must exist in both states ---------- */
+.app-shell { transition: grid-template-columns 240ms var(--ease), background-color 640ms var(--ease); }
+.sidebar, .topbar {
+  --chrome-skin: 0; --chrome-fireflies: 0;
+  --chrome-badge-bg: color-mix(in srgb, var(--c-sanctuary) 10%, var(--surface-2));
+  --chrome-badge-ring: var(--border-strong);
+  transition:
+    --sidebar 640ms var(--ease), --text 640ms var(--ease), --text-2 640ms var(--ease), --text-3 640ms var(--ease),
+    --surface 640ms var(--ease), --surface-2 640ms var(--ease), --surface-3 640ms var(--ease), --selection 640ms var(--ease),
+    --border 640ms var(--ease), --border-strong 640ms var(--ease), --field 640ms var(--ease),
+    --blue 640ms var(--ease), --accent 640ms var(--ease), --accent-soft 640ms var(--ease), --accent-deep 640ms var(--ease),
+    --chrome-wood 640ms var(--ease), --chrome-badge-bg 640ms var(--ease), --chrome-badge-ring 640ms var(--ease),
+    --chrome-skin 640ms var(--ease), --chrome-fireflies 640ms var(--ease),
+    box-shadow 640ms var(--ease), border-color 640ms var(--ease), color 640ms var(--ease);
+}
+.topbar { color: var(--text); }
+
+/* The painted skins live on pseudo-elements and fade with --chrome-skin, under the content. */
+.sidebar::before, .topbar::before {
+  content: ''; position: absolute; z-index: -1; pointer-events: none; opacity: var(--chrome-skin);
+}
+.sidebar::before { inset: 0; }
+.topbar::before { inset: 0 0 -22px 0; }
+
+/* Hearth's badge ring goes through a token so it can tween to lantern light. */
+.hearth-badge { background: var(--chrome-badge-bg); box-shadow: inset 0 0 0 0.5px var(--chrome-badge-ring); }
+
+/* Search groove and the sidebar seam tween with the rest. */
+.sidebar-search { transition: border-color 120ms ease, background 120ms ease, box-shadow 640ms var(--ease); }
+
+/* Fireflies: three tiny points that drift in the sidebar's quiet space. They are always in the
+   DOM as pseudo-elements, invisible until --chrome-fireflies rises. The twinkle is a filter so the
+   enter/leave opacity can be its own tween. */
+.sidebar::after, .list-nav + .sidebar-divider::after, .secondary-nav + .sidebar-divider::after {
+  content: ''; position: absolute; z-index: -1; width: 3px; height: 3px; border-radius: 50%; pointer-events: none;
+  background: #fff1c8; box-shadow: 0 0 6px 2px rgba(255, 214, 130, 0.7), 0 0 14px 4px rgba(255, 186, 110, 0.25);
+  opacity: var(--chrome-fireflies);
+}
+.sidebar-divider { position: relative; }
+.sidebar::after { left: 34px; bottom: 112px; }
+.list-nav + .sidebar-divider::after { right: 26px; top: 46px; }
+.secondary-nav + .sidebar-divider::after { left: 58px; top: 70px; }
+
+/* ---------- 3. Scoped: the Sanctuary skin (night values; day overrides below) ---------- */
+.app-shell.is-sanctuary { background-color: #2a1c11; }
+.app-shell.is-sanctuary .sidebar, .app-shell.is-sanctuary .topbar {
+  --chrome-serif: ui-serif, 'New York', 'Iowan Old Style', Georgia, serif;
+  --chrome-wood: #2a1c11;
+  --sidebar: #2a1c11;
+  --text: #f1e3c4;
+  --text-2: rgba(241, 227, 196, 0.64);
+  --text-3: rgba(241, 227, 196, 0.42);
+  --surface: #3a2816;
+  --surface-2: rgba(255, 220, 170, 0.07);
+  --surface-3: rgba(255, 220, 170, 0.12);
+  --selection: rgba(255, 196, 107, 0.16);
+  --border: rgba(255, 220, 170, 0.12);
+  --border-strong: rgba(255, 220, 170, 0.22);
+  --field: rgba(0, 0, 0, 0.32);
+  --blue: #ffc46b;
+  --accent: #ffc46b;
+  --accent-soft: rgba(255, 196, 107, 0.14);
+  --accent-deep: #ffd68f;
+  --chrome-badge-bg: rgba(255, 196, 107, 0.14);
+  --chrome-badge-ring: rgba(255, 196, 107, 0.4);
+  --chrome-skin: 1;
+  --chrome-glow: rgba(255, 186, 110, 0.3); /* lantern light reaching the wood */
+  --chrome-glow-2: rgba(255, 160, 90, 0.1);
+  --chrome-moss: rgba(96, 128, 54, 0.22);
+  --chrome-carve: 0 1px 0 rgba(0, 0, 0, 0.65), 0 0 10px rgba(0, 0, 0, 0.4);
+}
+.app-shell.is-sanctuary .sidebar { --chrome-fireflies: 1; }
+
+/* Sidebar: the inner face of the trunk. Vertical grain, lantern light spilling onto its right
+   edge at lantern height, a mossy foot, a shadow it casts on the painting. */
+.app-shell.is-sanctuary .sidebar {
+  border-right-color: rgba(0, 0, 0, 0.55);
+  box-shadow: inset -1px 0 0 rgba(255, 220, 170, 0.06), 8px 0 22px -8px rgba(0, 0, 0, 0.5);
+}
+.sidebar::before {
+  background:
+    radial-gradient(360px 280px at 100% 27%, var(--chrome-glow, transparent), var(--chrome-glow-2, transparent) 45%, transparent 72%),
+    radial-gradient(220px 320px at 0% 100%, var(--chrome-moss, transparent), transparent 70%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.28), transparent 110px),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.22), transparent 160px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='512'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.07 0.005' numOctaves='3' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.9 0 0 0 -0.25'/%3E%3C/filter%3E%3Crect width='256' height='512' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: auto, auto, auto, auto, 256px 512px;
+  background-blend-mode: normal, normal, normal, normal, multiply;
+}
+
+/* Rows: system font, parchment, lamplight selection. Icons keep their view colours. */
+.app-shell.is-sanctuary .sidebar-link.active, .app-shell.is-sanctuary .list-nav-row.active {
+  box-shadow: inset 0 0 0 1px rgba(255, 196, 107, 0.12);
+}
+
+/* Search: a groove cut into the wood. */
+.app-shell.is-sanctuary .sidebar-search {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 220, 170, 0.08);
+}
+.app-shell.is-sanctuary .sidebar-search:focus-within {
+  background: rgba(0, 0, 0, 0.42);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(255, 196, 107, 0.2);
+}
+
+/* Dividers: a carved line, dark cut over a light lip. */
+.app-shell.is-sanctuary .sidebar-divider { background: rgba(0, 0, 0, 0.45); box-shadow: 0 1px 0 rgba(255, 220, 170, 0.1); }
+
+/* Footer: Time today, Hearth's face in lantern light, New list, gear. */
+.app-shell.is-sanctuary .hearth-badge { box-shadow: inset 0 0 0 1px var(--chrome-badge-ring), 0 0 12px rgba(255, 186, 110, 0.28); }
+.app-shell.is-sanctuary .hearth-badge:hover { box-shadow: inset 0 0 0 1px rgba(255, 196, 107, 0.75), 0 0 14px rgba(255, 186, 110, 0.4); }
+
+/* Update Knot: amber on amber over walnut; the download fill stays the accent gradient. */
+.app-shell.is-sanctuary .sidebar-update { box-shadow: inset 0 0 0 1px rgba(255, 196, 107, 0.16); }
+
+/* Settings popover: a walnut panel at night, parchment by day. All inner rows follow the tokens. */
+.app-shell.is-sanctuary .settings-popover {
+  box-shadow: 0 0 0 1px rgba(20, 10, 4, 0.6), inset 0 1px 0 rgba(255, 220, 170, 0.14), var(--shadow-md);
+  border-color: rgba(255, 220, 170, 0.18);
+}
+.app-shell.is-sanctuary .segmented button.active { background: rgba(255, 220, 170, 0.16); box-shadow: none; }
+.app-shell.is-sanctuary .settings-popover kbd { background: rgba(0, 0, 0, 0.3); color: var(--text-2); }
+
+/* Fireflies: drift and twinkle. Each has its own path and period. */
+.app-shell.is-sanctuary .sidebar::after { animation: chrome-firefly-a 11s ease-in-out infinite; animation-delay: -4s; }
+.app-shell.is-sanctuary .list-nav + .sidebar-divider::after { animation: chrome-firefly-b 13s ease-in-out infinite; animation-delay: -9s; }
+.app-shell.is-sanctuary .secondary-nav + .sidebar-divider::after { animation: chrome-firefly-c 9s ease-in-out infinite; animation-delay: -2s; }
+@keyframes chrome-firefly-a {
+  0% { transform: translate(0, 0) scale(.8); filter: opacity(.15); }
+  20% { filter: opacity(.95); }
+  45% { transform: translate(14px, -26px) scale(1); filter: opacity(.3); }
+  70% { filter: opacity(.9); }
+  100% { transform: translate(-6px, -48px) scale(.7); filter: opacity(0); }
+}
+@keyframes chrome-firefly-b {
+  0% { transform: translate(0, 0) scale(.7); filter: opacity(0); }
+  25% { filter: opacity(.85); }
+  50% { transform: translate(-18px, 22px) scale(1); filter: opacity(.25); }
+  75% { filter: opacity(.9); }
+  100% { transform: translate(-30px, 46px) scale(.6); filter: opacity(0); }
+}
+@keyframes chrome-firefly-c {
+  0% { transform: translate(0, 0) scale(.9); filter: opacity(0); }
+  30% { filter: opacity(.8); }
+  55% { transform: translate(22px, 18px) scale(.8); filter: opacity(.2); }
+  80% { filter: opacity(.75); }
+  100% { transform: translate(40px, 2px) scale(.6); filter: opacity(0); }
+}
+
+/* Collapsed rail: same wood and light (the glow simply covers more of the 76px rail), one firefly. */
+.sidebar.is-collapsed .sidebar-divider::after { display: none; }
+.sidebar.is-collapsed::after { left: 30px; bottom: 150px; }
+
+/* ---------- 4. Header: the lip of the hollow over the painting ---------- */
+/* The band is walnut that darkens toward the ceiling, with lantern light reaching its lower left
+   (the lanterns hang just under it). It runs 22px past the title row and fades out over the
+   painting's top edge, so there is no line between chrome and scene. */
+.topbar::before {
+  background:
+    radial-gradient(560px 150px at 14% 100%, var(--chrome-glow, transparent), transparent 70%),
+    linear-gradient(180deg, var(--chrome-band-top, transparent) 0%, var(--chrome-wood) 62%, var(--chrome-wood) calc(100% - 22px), var(--chrome-bleed, var(--chrome-wood)) calc(100% - 22px), transparent 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='256'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.005 0.07' numOctaves='3' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.9 0 0 0 -0.25'/%3E%3C/filter%3E%3Crect width='512' height='256' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: auto, auto, 512px 256px;
+  mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent 100%);
+}
+.app-shell.is-sanctuary .topbar { --chrome-band-top: #1a1109; }
+.app-shell.is-sanctuary .sanc-scene { border-top-color: transparent; }
+.app-shell.is-sanctuary .workspace { background: transparent; } /* the app-shell's wood shows through behind the band while it fades */
+
+/* Title: the one place the serif leaves the scene. Same size, carved. The icon keeps its hue. */
+.app-shell.is-sanctuary .page-identity h1 {
+  font-family: var(--chrome-serif); font-weight: 600; letter-spacing: -0.005em; text-shadow: var(--chrome-carve);
+}
+.app-shell.is-sanctuary .page-icon { filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.5)); }
+
+/* Glimmers: a small walnut tag like the keepsakes tag, in both themes (objects carry their own ground). */
+.app-shell.is-sanctuary .sanctuary-glimmers {
+  height: 24px; padding: 0 9px 1px 7px; border-radius: 3px; gap: 5px;
+  font-family: var(--chrome-serif); font-size: 12.5px; font-weight: 500; letter-spacing: 0.01em; color: #f1e3c4;
+  background: linear-gradient(180deg, #55371e, #3b2612);
+  box-shadow: 0 0 0 1px rgba(20, 10, 4, 0.7), inset 0 1px 0 rgba(255, 220, 170, 0.18), 0 3px 8px rgba(0, 0, 0, 0.45);
+}
+.app-shell.is-sanctuary .sanctuary-glimmers svg { color: #ffc46b; filter: drop-shadow(0 0 3px rgba(255, 196, 107, 0.6)); }
+.app-shell.is-sanctuary .topbar .icon-button { color: var(--text-2); }
+.app-shell.is-sanctuary .topbar .icon-button:hover { color: var(--text); background: var(--surface-2); }
+
+/* ---------- 5. Day (light theme): sunlit oak ---------- */
+:root[data-theme='light'] .app-shell.is-sanctuary { background-color: #dac59f; }
+:root[data-theme='light'] .app-shell.is-sanctuary .sidebar, :root[data-theme='light'] .app-shell.is-sanctuary .topbar {
+  --chrome-wood: #dac59f;
+  --sidebar: #dac59f;
+  --text: #2b1d10;
+  --text-2: rgba(43, 29, 16, 0.66);
+  --text-3: rgba(43, 29, 16, 0.46);
+  --surface: #f1e3c4;
+  --surface-2: rgba(70, 45, 20, 0.07);
+  --surface-3: rgba(70, 45, 20, 0.12);
+  --selection: rgba(70, 45, 20, 0.13);
+  --border: rgba(70, 45, 20, 0.16);
+  --border-strong: rgba(70, 45, 20, 0.28);
+  --field: rgba(70, 45, 20, 0.09);
+  --blue: #b06a18;
+  --accent: #b06a18;
+  --accent-soft: rgba(176, 106, 24, 0.14);
+  --accent-deep: #8a4f0e;
+  --chrome-badge-bg: rgba(176, 106, 24, 0.14);
+  --chrome-badge-ring: rgba(176, 106, 24, 0.45);
+  --chrome-glow: rgba(255, 246, 220, 0.42);
+  --chrome-glow-2: rgba(255, 234, 186, 0.14);
+  --chrome-moss: rgba(110, 140, 60, 0.2);
+  --chrome-carve: 0 1px 0 rgba(255, 250, 235, 0.6);
+}
+:root[data-theme='light'] .app-shell.is-sanctuary .sidebar { --chrome-fireflies: 0; }
+:root[data-theme='light'] .app-shell.is-sanctuary .sidebar {
+  border-right-color: rgba(60, 38, 16, 0.35);
+  box-shadow: inset -1px 0 0 rgba(255, 250, 235, 0.35), 8px 0 20px -8px rgba(60, 38, 16, 0.35);
+}
+:root[data-theme='light'] .sidebar::before {
+  /* same layers, lighter ceiling and foot shading */
+  background:
+    radial-gradient(360px 280px at 100% 27%, var(--chrome-glow, transparent), var(--chrome-glow-2, transparent) 45%, transparent 72%),
+    radial-gradient(220px 320px at 0% 100%, var(--chrome-moss, transparent), transparent 70%),
+    linear-gradient(180deg, rgba(60, 38, 16, 0.1), transparent 110px),
+    linear-gradient(0deg, rgba(60, 38, 16, 0.12), transparent 160px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='512'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.045 0.004' numOctaves='3' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.16 0 0 0 -0.06'/%3E%3C/filter%3E%3Crect width='256' height='512' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: auto, auto, auto, auto, 256px 512px;
+}
+:root[data-theme='light'] .app-shell.is-sanctuary .sidebar-link.active, :root[data-theme='light'] .app-shell.is-sanctuary .list-nav-row.active {
+  box-shadow: inset 0 0 0 1px rgba(70, 45, 20, 0.08), inset 0 1px 0 rgba(255, 250, 235, 0.35);
+}
+:root[data-theme='light'] .app-shell.is-sanctuary .sidebar-search { box-shadow: inset 0 1px 2px rgba(60, 38, 16, 0.22), 0 1px 0 rgba(255, 250, 235, 0.45); }
+:root[data-theme='light'] .app-shell.is-sanctuary .sidebar-search:focus-within { background: rgba(255, 250, 235, 0.55); box-shadow: inset 0 1px 2px rgba(60, 38, 16, 0.15), 0 0 0 3px rgba(176, 106, 24, 0.22); }
+:root[data-theme='light'] .app-shell.is-sanctuary .sidebar-divider { background: rgba(60, 38, 16, 0.22); box-shadow: 0 1px 0 rgba(255, 250, 235, 0.45); }
+:root[data-theme='light'] .app-shell.is-sanctuary .hearth-badge { box-shadow: inset 0 0 0 1px var(--chrome-badge-ring), 0 0 10px rgba(255, 220, 150, 0.6); }
+:root[data-theme='light'] .app-shell.is-sanctuary .hearth-badge:hover { box-shadow: inset 0 0 0 1px rgba(176, 106, 24, 0.8), 0 0 12px rgba(255, 220, 150, 0.7); }
+:root[data-theme='light'] .app-shell.is-sanctuary .sidebar-update { box-shadow: inset 0 0 0 1px rgba(176, 106, 24, 0.18); }
+:root[data-theme='light'] .app-shell.is-sanctuary .settings-popover {
+  box-shadow: 0 0 0 1px #b89a68, inset 0 0 0 1px rgba(255, 250, 235, 0.6), var(--shadow-md);
+  border-color: transparent;
+}
+:root[data-theme='light'] .app-shell.is-sanctuary .segmented button.active { background: rgba(255, 250, 235, 0.8); box-shadow: var(--shadow-sm); }
+:root[data-theme='light'] .app-shell.is-sanctuary .settings-popover kbd { background: rgba(70, 45, 20, 0.08); }
+:root[data-theme='light'] .app-shell.is-sanctuary .topbar { --chrome-band-top: #cfb78d; --chrome-bleed: rgba(60, 38, 16, 0.38); }
+:root[data-theme='light'] .topbar::before {
+  background:
+    radial-gradient(560px 150px at 14% 100%, var(--chrome-glow, transparent), transparent 70%),
+    linear-gradient(180deg, var(--chrome-band-top, transparent) 0%, var(--chrome-wood) 62%, var(--chrome-wood) calc(100% - 22px), var(--chrome-bleed, var(--chrome-wood)) calc(100% - 22px), transparent 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='256'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.004 0.045' numOctaves='3' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.16 0 0 0 -0.06'/%3E%3C/filter%3E%3Crect width='512' height='256' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: auto, auto, 512px 256px;
+}
+:root[data-theme='light'] .app-shell.is-sanctuary .page-icon { filter: none; }
+
+/* ---------- 6. Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .app-shell, .sidebar, .topbar, .sidebar::before, .topbar::before, .sidebar-search, .hearth-badge { transition-duration: 1ms !important; }
+  .app-shell.is-sanctuary .sidebar::after, .app-shell.is-sanctuary .sidebar-divider::after { animation: none; filter: opacity(.6); }
+}

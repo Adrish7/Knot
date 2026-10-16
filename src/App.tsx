@@ -861,7 +861,7 @@ function App() {
   return (
     <TagsContext.Provider value={tagsApi}>
       <div
-        className={`app-shell ${data.preferences.sidebarCollapsed ? 'sidebar-collapsed' : ''} ${activeList ? 'is-accented' : ''}`}
+        className={`app-shell ${data.preferences.sidebarCollapsed ? 'sidebar-collapsed' : ''} ${activeList ? 'is-accented' : ''} ${selectedView === 'sanctuary' && !searching ? 'is-sanctuary' : ''}`}
         style={activeList ? { '--list-accent': activeList.color } as React.CSSProperties : undefined}
         onMouseDown={() => listMenu && setListMenu(null)}
       >
