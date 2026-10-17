@@ -4,9 +4,9 @@ Knot is a calm, native-feeling task manager for macOS. Lists, a Today view, a ca
 
 ## Download
 
-**[Download Knot 1.6.0 for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/latest/download/Knot-mac-arm64.dmg)**
+**[Download Knot 1.6.1 for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/latest/download/Knot-mac-arm64.dmg)**
 
-Latest version: **1.6.0**, released October 17, 2026 ([what's new](https://github.com/Adrish7/Knot/releases/tag/v1.6.0), [all releases](https://github.com/Adrish7/Knot/releases)). The link always downloads the newest release.
+Latest version: **1.6.1**, released October 17, 2026 ([what's new](https://github.com/Adrish7/Knot/releases/tag/v1.6.1), [all releases](https://github.com/Adrish7/Knot/releases)). The link always downloads the newest release.
 
 Requirements: an Apple Silicon Mac (M1 or later) running macOS 12 or newer. Intel Macs are not supported.
 

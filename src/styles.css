@@ -911,6 +911,3 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
    the file so it wins over each loop's own `animation` shorthand. */
 :root.is-away :is(.run-dot, .update-icon.is-busy svg, .cinder-rig, .cinder-halo, .cinder-steam),
 :root.is-away .sw-band-cap::after, :root.is-away .sw-row-dot::after { animation-play-state: paused; }
-/* The readout's digits change without rolling (the old digit simply goes). */
-:root.is-away .sw-ink-dg.is-in { animation: none; }
-:root.is-away .sw-ink-dg.is-out { display: none; }
