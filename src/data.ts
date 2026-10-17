@@ -24,6 +24,7 @@ export function createDefaultPreferences(): Preferences {
     sortMode: 'manual',
     sidebarCollapsed: false,
     launchAtLogin: false,
+    sanctuary: true,
   }
 }
 
@@ -247,6 +248,7 @@ export function normalizeData(value: unknown): KnotData | null {
       sortMode: oneOf(sortModes, preferences.sortMode, defaults.sortMode),
       sidebarCollapsed: typeof preferences.sidebarCollapsed === 'boolean' ? preferences.sidebarCollapsed : defaults.sidebarCollapsed,
       launchAtLogin: typeof preferences.launchAtLogin === 'boolean' ? preferences.launchAtLogin : defaults.launchAtLogin,
+      sanctuary: typeof preferences.sanctuary === 'boolean' ? preferences.sanctuary : defaults.sanctuary,
     },
   }
 }

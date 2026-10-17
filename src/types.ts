@@ -72,6 +72,7 @@ export interface Preferences {
   sortMode: SortMode
   sidebarCollapsed: boolean
   launchAtLogin: boolean
+  sanctuary: boolean // the Sanctuary, Hearth and Cinder; off, none of it is loaded or drawn
 }
 
 // The Sanctuary's stored state; everything else it shows is derived (see sanctuary.ts).

@@ -4,9 +4,9 @@ Knot is a calm, native-feeling task manager for macOS. Lists, a Today view, a ca
 
 ## Download
 
-**[Download Knot 1.5.2 for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/latest/download/Knot-mac-arm64.dmg)**
+**[Download Knot 1.6.0 for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/latest/download/Knot-mac-arm64.dmg)**
 
-Latest version: **1.5.2**, released October 16, 2026 ([what's new](https://github.com/Adrish7/Knot/releases/tag/v1.5.2), [all releases](https://github.com/Adrish7/Knot/releases)). The link always downloads the newest release.
+Latest version: **1.6.0**, released October 17, 2026 ([what's new](https://github.com/Adrish7/Knot/releases/tag/v1.6.0), [all releases](https://github.com/Adrish7/Knot/releases)). The link always downloads the newest release.
 
 Requirements: an Apple Silicon Mac (M1 or later) running macOS 12 or newer. Intel Macs are not supported.
 
@@ -46,8 +46,9 @@ Your tasks are kept either way. They live in your Application Support folder, no
 - Today, Calendar, Starred, Completed, and Recently deleted views
 - Notes, subtasks, due date and time, reminders, recurrence, and time spent
 - A stopwatch for any task, plus an open stopwatch, with a day timeline of your sessions and per-day totals in the calendar
-- The Sanctuary: a painted tree hollow that fills with your focus time. Lanterns light up through the day, Hearth grows over the long run, and glimmers buy keepsakes for the hollow
+- The Sanctuary: a painted tree hollow that fills with your focus time. Five lanterns light up over a 6 hour day, Hearth grows over the long run, and glimmers buy keepsakes for the hollow
 - Two buddies: Hearth keeps the hollow, and Cinder sits beside the stopwatch and offers a break after 50 minutes without one. Click either of them
+- Settings has a switch for the Sanctuary and buddies. Turned off, none of it is loaded, so Knot does less work
 - Tags such as Productive, Break and Relaxing, with time on break-tagged tasks counted as breaks rather than work
 - Mark tasks done for the day from the stopwatch's Today list, and drag that list into any order
 - Drag to reorder tasks; manual, due-date, or starred-first sorting

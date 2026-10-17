@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, CircleArrowDown, Download, Ellipsis, Inbox, MoonStar, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Timer, Trash2, Upload, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, CircleArrowDown, Download, Ellipsis, Inbox, Leaf, MoonStar, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Timer, Trash2, Upload, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { dayKeyOf, isForToday, todayKey } from '../format'
 import { dayBalance, isBreakTask } from '../tags'
@@ -34,12 +34,14 @@ interface SidebarProps {
   onExport?: () => void
   onImport?: () => void
   updates: UpdateApi
-  buddy: { state: EnergyState; stage: GrowthStage; here: boolean } // here: the Sanctuary is open
+  buddy: { state: EnergyState; stage: GrowthStage; here: boolean } | null // here: the Sanctuary is open; null while it is turned off
+  sanctuaryOn: boolean
+  onSanctuary: (on: boolean) => void
   onBuddy: () => void
   onShowWhatsNew: () => void
 }
 
-export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport, updates, buddy, onBuddy, onShowWhatsNew }: SidebarProps) {
+export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport, updates, buddy, sanctuaryOn, onSanctuary, onBuddy, onShowWhatsNew }: SidebarProps) {
   const [editingListId, setEditingListId] = useState<string | null>(null)
   const [draftListName, setDraftListName] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -110,7 +112,7 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
         <SidebarLink collapsed={collapsed} active={selectedView === 'calendar'} color="var(--c-calendar)" icon={<CalendarDays />} label="Calendar" count={0} onClick={() => onSelect('calendar')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'starred'} color="var(--c-starred)" icon={<Star fill="currentColor" />} label="Starred" count={starredCount} onClick={() => onSelect('starred')} />
         <SidebarLink collapsed={collapsed} active={selectedView === 'stopwatch'} color="var(--c-timer)" icon={<Timer />} label="Stopwatch" count={runningTrack ? <span className="nav-live"><span className="run-dot" aria-hidden="true" />{formatClock(totalSeconds(runningTrack, now))}</span> : 0} onClick={() => onSelect('stopwatch')} />
-        <SidebarLink collapsed={collapsed} active={selectedView === 'sanctuary'} color="var(--c-sanctuary)" icon={<MoonStar />} label="Sanctuary" count={0} onClick={() => onSelect('sanctuary')} data-tour="sanctuary-nav" />
+        {sanctuaryOn && <SidebarLink collapsed={collapsed} active={selectedView === 'sanctuary'} color="var(--c-sanctuary)" icon={<MoonStar />} label="Sanctuary" count={0} onClick={() => onSelect('sanctuary')} data-tour="sanctuary-nav" />}
       </nav>
       <nav className="secondary-nav" aria-label="Archive">
         <SidebarLink collapsed={collapsed} active={selectedView === 'completed'} color="var(--c-done)" icon={<CheckCircle2 />} label="Completed" count={completedCount} onClick={() => onSelect('completed')} />
@@ -175,7 +177,7 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
           <Timer />
           {!collapsed && <><span>Time today</span><span className="nav-count">{todayLabel}</span></>}
         </button>
-        {!collapsed && <HearthBadge state={buddy.state} stage={buddy.stage} here={buddy.here} cheer={cheer} onClick={onBuddy} />}
+        {!collapsed && buddy && <HearthBadge state={buddy.state} stage={buddy.stage} here={buddy.here} cheer={cheer} onClick={onBuddy} />}
       </div>
 
       {updates.update && <UpdateButton collapsed={collapsed} updates={updates} />}
@@ -202,9 +204,13 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
               <span><Power size={15} />Open at login</span>
               <span className={`switch ${launchAtLogin ? 'on' : ''}`} />
             </button>
-            <button className="settings-row settings-action" onClick={() => { setSettingsOpen(false); onShowWhatsNew() }}>
-              <span><MoonStar size={15} />Show what’s new</span>
+            <button className="settings-row settings-action" role="switch" aria-checked={sanctuaryOn} onClick={() => onSanctuary(!sanctuaryOn)} title="The Sanctuary, Hearth and Cinder. Turned off, none of it is loaded, so Knot does less.">
+              <span><Leaf size={15} />Sanctuary</span>
+              <span className={`switch ${sanctuaryOn ? 'on' : ''}`} />
             </button>
+            {sanctuaryOn && <button className="settings-row settings-action" onClick={() => { setSettingsOpen(false); onShowWhatsNew() }}>
+              <span><MoonStar size={15} />Show what’s new</span>
+            </button>}
             {onExport && onImport && <>
               <div className="settings-divider" />
               <button className="settings-row settings-action" onClick={() => { setSettingsOpen(false); onExport() }}>

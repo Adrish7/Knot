@@ -3,6 +3,7 @@
 // ring, start / pause / reset), turns pointer movement into stirring, resolves colours from CSS,
 // and runs the one requestAnimationFrame loop, which sleeps whenever nothing can move.
 
+import { activity, onActivity } from '../../activity'
 import { Fluid, RIM, type DisplayParams, type SimParams } from './fluid'
 
 export interface FaceStats {
@@ -108,6 +109,8 @@ export class InkController {
   private readonly motion: MediaQueryList
   private stats: FaceStats = { frames: 0, steps: 0, loop: false, frameMs: 0, avgMs: 0, maxMs: 0, gpuMs: null, sleeps: 0 }
   private disposed = false
+  private behind = false // seconds went by while away without their drops; the trail is re-laid on return
+  private readonly offActivity: () => void
 
   constructor(private readonly root: HTMLDivElement, private readonly canvas: HTMLCanvasElement, private readonly probe: HTMLElement, private readonly onSecond: (second: number) => void) {
     this.motion = matchMedia('(prefers-reduced-motion: reduce)')
@@ -130,7 +133,7 @@ export class InkController {
     root.addEventListener('pointerleave', this.onPointerLeave)
     canvas.addEventListener('webglcontextlost', this.onLost)
     canvas.addEventListener('webglcontextrestored', this.onRestored)
-    document.addEventListener('visibilitychange', this.onVisibility)
+    this.offActivity = onActivity(this.onVisibility)
     this.motion.addEventListener('change', this.onMotion)
     window.__faceStats = this.stats
   }
@@ -201,9 +204,14 @@ export class InkController {
     this.render()
   }
 
+  // While another app is in front (or the window is hidden) the water holds still: the loop stops
+  // and the seconds' drops are skipped. The readout keeps counting. On return the trail is re-laid
+  // as it would look by now.
   private onVisibility = () => {
-    if (document.hidden) this.stop()
-    else this.wake(300)
+    if (activity().away) { this.stop(); return }
+    if (this.behind && this.running && !this.reduced) this.seedTrail(this.shownSecond)
+    this.behind = false
+    this.wake(300)
   }
 
   private onMotion = () => {
@@ -273,6 +281,7 @@ export class InkController {
     this.shownSecond = whole
     this.onSecond(whole)
     if (!this.running) return
+    if (activity().away) { this.behind = true; return }
     const delta = whole - prev
     if (this.reduced) { this.renderStatic(); return }
     if (delta < 1 || delta > 3) { this.seedTrail(whole); return }
@@ -431,7 +440,13 @@ export class InkController {
     if (this.disposed) return
     const now = performance.now()
     this.activeUntil = Math.max(this.activeUntil, now + ms)
-    if (!this.loop && !this.timer && !document.hidden) {
+    if (activity().away) {
+      // Nothing moves, but what was asked for (the trail on opening, a new colour) is drawn once.
+      const fluid = this.fluid
+      if (fluid && this.queue.length) { for (const fn of this.queue.splice(0)) fn(fluid); this.render() }
+      return
+    }
+    if (!this.loop && !this.timer) {
       this.lastFrameAt = 0
       this.stats.loop = true
       this.loop = requestAnimationFrame(this.frame)
@@ -499,7 +514,7 @@ export class InkController {
     s.maxMs = Math.max(s.maxMs, cost)
     s.gpuMs = fluid?.timer.last ?? null
 
-    if (document.hidden) { this.stop(); return }
+    if (activity().away) { this.stop(); return }
     if ((this.running && !this.reduced) || now < this.activeUntil || settling || this.pulses.length || this.queue.length) {
       this.loop = requestAnimationFrame(this.frame)
     } else if (this.running && this.reduced) {
@@ -593,7 +608,7 @@ export class InkController {
     root.removeEventListener('pointerleave', this.onPointerLeave)
     this.canvas.removeEventListener('webglcontextlost', this.onLost)
     this.canvas.removeEventListener('webglcontextrestored', this.onRestored)
-    document.removeEventListener('visibilitychange', this.onVisibility)
+    this.offActivity()
     this.motion.removeEventListener('change', this.onMotion)
     this.fluid?.dispose()
     this.fluid = null

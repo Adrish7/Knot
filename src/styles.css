@@ -131,7 +131,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 
 /* ---------- Sidebar ---------- */
 
-.sidebar { position: relative; z-index: 5; display: flex; flex-direction: column; min-width: 0; padding: 0 10px 10px; background: var(--sidebar); border-right: 1px solid var(--border); backdrop-filter: blur(32px) saturate(140%); }
+.sidebar { position: relative; z-index: 5; display: flex; flex-direction: column; min-width: 0; padding: 0 10px 10px; background: var(--sidebar); border-right: 1px solid var(--border); }
 .sidebar-top { display: flex; align-items: center; justify-content: flex-end; height: 52px; flex: 0 0 auto; padding-right: 2px; -webkit-app-region: drag; }
 .sidebar-top .icon-button { color: var(--text-3); }
 .sidebar-top .icon-button:hover { color: var(--text); }
@@ -906,3 +906,11 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
 .sidebar.is-collapsed .hearth-badge { display: none; }
 @media (prefers-reduced-motion: reduce) { .update-icon.is-busy svg { animation: none; opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) { .hearth-badge, .hearth-badge img, .app-shell .hearth-badge.is-poked { transition: none; animation: none; } }
+
+/* While another app is in front, the loops that run on their own hold still (src/activity.ts). Last in
+   the file so it wins over each loop's own `animation` shorthand. */
+:root.is-away :is(.run-dot, .update-icon.is-busy svg, .cinder-rig, .cinder-halo, .cinder-steam),
+:root.is-away .sw-band-cap::after, :root.is-away .sw-row-dot::after { animation-play-state: paused; }
+/* The readout's digits change without rolling (the old digit simply goes). */
+:root.is-away .sw-ink-dg.is-in { animation: none; }
+:root.is-away .sw-ink-dg.is-out { display: none; }

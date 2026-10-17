@@ -8,7 +8,8 @@
    Everything else is driven by registered custom properties that animate on
    `.sidebar` and `.topbar`, so entering and leaving crossfade in 640ms with
    no per-row transition conflicts (hover feedback keeps its own 120ms).
-   Imported after styles.css (src/main.tsx).
+   Loaded with the Sanctuary page the first time it opens (after styles.css),
+   so with the Sanctuary turned off none of this is registered.
 ------------------------------------------------------------------ */
 
 /* ---------- 1. Animatable tokens ----------
@@ -66,13 +67,13 @@
 /* Search groove and the sidebar seam tween with the rest. */
 .sidebar-search { transition: border-color 120ms ease, background 120ms ease, box-shadow 640ms var(--ease); }
 
-/* Fireflies: three tiny points that drift in the sidebar's quiet space. They are always in the
-   DOM as pseudo-elements, invisible until --chrome-fireflies rises. The twinkle is a filter so the
-   enter/leave opacity can be its own tween. */
+/* Fireflies: three tiny points resting in the sidebar's quiet space. They are always in the DOM as
+   pseudo-elements, invisible until --chrome-fireflies rises. They used to drift and twinkle; held
+   still (as reduced motion always had them) the window doesn't recomposite the sidebar every frame. */
 .sidebar::after, .list-nav + .sidebar-divider::after, .secondary-nav + .sidebar-divider::after {
   content: ''; position: absolute; z-index: -1; width: 3px; height: 3px; border-radius: 50%; pointer-events: none;
   background: #fff1c8; box-shadow: 0 0 6px 2px rgba(255, 214, 130, 0.7), 0 0 14px 4px rgba(255, 186, 110, 0.25);
-  opacity: var(--chrome-fireflies);
+  opacity: calc(var(--chrome-fireflies) * 0.6);
 }
 .sidebar-divider { position: relative; }
 .sidebar::after { left: 34px; bottom: 112px; }
@@ -157,32 +158,6 @@
 }
 .app-shell.is-sanctuary .segmented button.active { background: rgba(255, 220, 170, 0.16); box-shadow: none; }
 .app-shell.is-sanctuary .settings-popover kbd { background: rgba(0, 0, 0, 0.3); color: var(--text-2); }
-
-/* Fireflies: drift and twinkle. Each has its own path and period. */
-.app-shell.is-sanctuary .sidebar::after { animation: chrome-firefly-a 11s ease-in-out infinite; animation-delay: -4s; }
-.app-shell.is-sanctuary .list-nav + .sidebar-divider::after { animation: chrome-firefly-b 13s ease-in-out infinite; animation-delay: -9s; }
-.app-shell.is-sanctuary .secondary-nav + .sidebar-divider::after { animation: chrome-firefly-c 9s ease-in-out infinite; animation-delay: -2s; }
-@keyframes chrome-firefly-a {
-  0% { transform: translate(0, 0) scale(.8); filter: opacity(.15); }
-  20% { filter: opacity(.95); }
-  45% { transform: translate(14px, -26px) scale(1); filter: opacity(.3); }
-  70% { filter: opacity(.9); }
-  100% { transform: translate(-6px, -48px) scale(.7); filter: opacity(0); }
-}
-@keyframes chrome-firefly-b {
-  0% { transform: translate(0, 0) scale(.7); filter: opacity(0); }
-  25% { filter: opacity(.85); }
-  50% { transform: translate(-18px, 22px) scale(1); filter: opacity(.25); }
-  75% { filter: opacity(.9); }
-  100% { transform: translate(-30px, 46px) scale(.6); filter: opacity(0); }
-}
-@keyframes chrome-firefly-c {
-  0% { transform: translate(0, 0) scale(.9); filter: opacity(0); }
-  30% { filter: opacity(.8); }
-  55% { transform: translate(22px, 18px) scale(.8); filter: opacity(.2); }
-  80% { filter: opacity(.75); }
-  100% { transform: translate(40px, 2px) scale(.6); filter: opacity(0); }
-}
 
 /* Collapsed rail: same wood and light (the glow simply covers more of the 76px rail), one firefly. */
 .sidebar.is-collapsed .sidebar-divider::after { display: none; }
@@ -283,7 +258,6 @@
 /* ---------- 6. Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .app-shell, .sidebar, .topbar, .sidebar::before, .topbar::before, .sidebar-search, .hearth-badge { transition-duration: 1ms !important; }
-  .app-shell.is-sanctuary .sidebar::after, .app-shell.is-sanctuary .sidebar-divider::after { animation: none; filter: opacity(.6); }
 }
 
 /* The update dot's ring takes the wood's colour. */

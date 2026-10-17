@@ -17,12 +17,14 @@ import keepSprout from '../../assets/sanctuary/keep-sprout.avif'
 import keepStarjar from '../../assets/sanctuary/keep-starjar.avif'
 import keepTeacup from '../../assets/sanctuary/keep-teacup.avif'
 import keepTelescope from '../../assets/sanctuary/keep-telescope.avif'
+import { activity, onActivity } from '../../activity'
 import { GLIMMER_MINUTES, GROWTH_STAGES, KEEPSAKES, hoursMinutes as hm } from '../../sanctuary'
 import type { EnergyState, SanctuaryStats } from '../../sanctuary'
 import type { SanctuaryState } from '../../types'
 import { HEARTH, HEARTH_GLAD, STAGE_SPRITES, hearthSprite } from './sprites'
 import type { Sprite } from './sprites'
 import './Sanctuary.css'
+import './SanctuaryChrome.css'
 
 export interface SanctuaryPageProps {
   stats: SanctuaryStats
@@ -40,12 +42,24 @@ export interface SanctuaryPageProps {
 const PW = 1586
 const PH = 992
 const S0 = 0.7611 // the plate scale the design was drawn at (a 1280 x 800 window)
-const EDGE = 10 // the world overhangs the scene by this much on every side, for the parallax
+const EDGE = 10 // the world overhangs the scene by this much on every side
 const SEEN_KEY = 'knot.sanctuary.lastSeenEarned'
+const IDLE_MS = 45_000 // with no pointer or key for this long, the ambient motion rests
+const FRAME_GAP = 66 // ms to wait before asking for the next canvas frame: about 13 fps
 
 interface Geo { S: number; OX: number; OY: number; W: number; H: number }
 
-const FLIES: Record<EnergyState, number> = { asleep: 3, stirring: 7, awake: 12, lively: 20, radiant: 30 }
+const FLIES: Record<EnergyState, number> = { asleep: 2, stirring: 4, awake: 7, lively: 11, radiant: 16 }
+
+// The buddies' breath (and Hearth's sway, by energy): periods in seconds, sway in degrees. It is set
+// from the canvas's tick, so the scene redraws only at the canvas's rate.
+const HEARTH_MOTION: Record<EnergyState, { breath: number; sway: number; swayPeriod: number }> = {
+  asleep: { breath: 5.8, sway: 0, swayPeriod: 1 },
+  stirring: { breath: 4.4, sway: 1.6, swayPeriod: 8.8 },
+  awake: { breath: 4.2, sway: 0.9, swayPeriod: 12.8 },
+  lively: { breath: 4.2, sway: 0.9, swayPeriod: 7.6 },
+  radiant: { breath: 4.2, sway: 0.9, swayPeriod: 12.8 },
+}
 
 // The five painted lanterns: glass centre and radii, and where the flame sits.
 const LAMPS = [
@@ -93,8 +107,6 @@ function seeded(seed: number) {
 }
 const rand = seeded(7)
 const JAR_MOTES = Array.from({ length: 26 }, () => ({ x: 22 + rand() * 56, y: 30 + rand() * 58, d: 1.6 + rand() * 1.8, o: -rand() * 3 }))
-const ORBIT = Array.from({ length: 9 }, () => ({ r: 62 + rand() * 70, d: 9 + rand() * 9, o: -rand() * 18 }))
-const FLAME_DELAYS = LAMPS.map(() => -rand() * 3)
 // Spores off Hearth's buds and sparks off Cinder's flame: a spread of short flights upward. A click
 // sends the first 8 (Cinder 7), three quick clicks all 18.
 const motes = (count: number, spread: number) => Array.from({ length: count }, (_, i) => {
@@ -162,7 +174,7 @@ function useReducedMotion() {
 type Buddy = 'hearth' | 'cinder'
 type Move = 'hop' | 'stir' | 'spin' // a standing buddy hops, a sitting one stirs, three quick clicks turn Hearth round
 interface Spark { x: number; y: number; vx: number; vy: number; life: number }
-interface Fly { x: number; y: number; c: [number, number, number]; r: number; t: number; sp: number; a: number; vx: number; vy: number; life: number }
+interface Fly { x: number; y: number; c: [number, number, number]; r: number; t: number; sp: number; a: number; vx: number; vy: number; life: number; home: { x: number; y: number; w: number; h: number } }
 
 export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: SanctuaryPageProps) {
   const theme = useDocumentTheme()
@@ -187,9 +199,10 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
   const [jarDelta, setJarDelta] = useState<{ text: string; key: number } | null>(null)
 
   // Shared with the canvas loop without re-running it.
-  const fx = useRef({ geo: null as Geo | null, theme, flies: FLIES[stats.energyState], reduced, sparks: [] as Spark[], kick: () => {} })
+  const fx = useRef({ geo: null as Geo | null, theme, flies: FLIES[stats.energyState], energy: stats.energyState, jarMotes: 0, reduced, rest: false, sparks: [] as Spark[], kick: () => {} })
   fx.current.theme = theme
   fx.current.flies = FLIES[stats.energyState]
+  fx.current.energy = stats.energyState
   fx.current.reduced = reduced
   fx.current.geo = geo
 
@@ -242,6 +255,7 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
   const jarBalance = Math.max(0, stats.balance - pending)
   const jarLevel = clamp(jarBalance / JAR.full, 0, 1)
   const jarMotes = Math.round(jarLevel * JAR_MOTES.length)
+  fx.current.jarMotes = jarMotes
 
   const tickJar = useCallback((delta: number) => {
     setJarDelta((current) => ({ text: `${delta > 0 ? '+' : '−'}${Math.abs(delta)}`, key: (current?.key ?? 0) + 1 }))
@@ -369,18 +383,10 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
     addSparks(x, y, 22, 1.8, 1.2)
   }
 
-  /* ---------- Parallax: the world drifts a few px against the pointer ---------- */
-  const onPointerMove = (event: React.PointerEvent) => {
-    const scene = sceneRef.current
-    if (!scene || reduced || openId) return
-    const r = scene.getBoundingClientRect()
-    scene.style.setProperty('--mx', (((event.clientX - r.left) / r.width - 0.5) * 2).toFixed(3))
-    scene.style.setProperty('--my', (((event.clientY - r.top) / r.height - 0.5) * 2).toFixed(3))
-  }
-  const resetParallax = () => { sceneRef.current?.style.setProperty('--mx', '0'); sceneRef.current?.style.setProperty('--my', '0') }
-  useEffect(() => { if (openId) resetParallax() }, [openId])
-
-  /* ---------- Fireflies, dust in the moon shaft, and sparks: one canvas, rAF only while shown ---------- */
+  /* ---------- Fireflies, dust in the moon shaft, the jar's motes and sparks: one canvas, rAF only while shown ----------
+     Slow, soft light, so it draws at 1x and about 13 fps (full rate while sparks fly); motion is per
+     ms, so the rate doesn't change its speed. Each glow and dot is drawn once to a sprite and stamped.
+     The same tick sets the buddies' breath. */
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
@@ -397,19 +403,48 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
       let pick = r() * total
       let zone = ZONES[0]
       for (const z of ZONES) { pick -= z.wgt; if (pick <= 0) { zone = z; break } }
-      return { x: zone.x + r() * zone.w, y: zone.y + r() * zone.h, c: zone.c, r: 1.4 + r() * 1.8, t: r() * 100, sp: 0.35 + r() * 0.5, a: 0, vx: (r() - 0.5) * 0.3, vy: (r() - 0.5) * 0.2, life: 1 }
+      return { x: zone.x + r() * zone.w, y: zone.y + r() * zone.h, c: zone.c, r: 1.4 + r() * 1.8, t: r() * 100, sp: 0.35 + r() * 0.5, a: 0, vx: (r() - 0.5) * 0.3, vy: (r() - 0.5) * 0.2, life: 1, home: zone }
     }
     const flies: Fly[] = []
-    const dust = Array.from({ length: 48 }, () => ({ y: 560 + r() * 430, u: r(), r: 0.8 + r() * 1.4, t: r() * 100, sp: 0.15 + r() * 0.25 }))
+    const dust = Array.from({ length: 24 }, () => ({ y: 560 + r() * 430, u: r(), r: 0.8 + r() * 1.4, t: r() * 100, sp: 0.15 + r() * 0.25 }))
     const shaftX = (y: number, u: number) => { const q = (y - 580) / 412; const left = 860 - 520 * q; const right = 1290 - 130 * q; return left + u * (right - left) }
+    // Every glow and dot is a sprite, drawn once per colour and stamped with globalAlpha.
+    const GLOW = [[0, 0.9], [0.3, 0.35], [1, 0]]
+    const DOT = [[0, 1], [0.8, 1], [1, 0]]
+    const sprites = new Map<string, HTMLCanvasElement>()
+    const sprite = (rgb: string, stops: number[][]) => {
+      const key = `${rgb}/${stops}`
+      let image = sprites.get(key)
+      if (!image) {
+        image = document.createElement('canvas')
+        image.width = image.height = 64
+        const g = image.getContext('2d')!
+        const fill = g.createRadialGradient(32, 32, 0, 32, 32, 32)
+        for (const [at, alpha] of stops) fill.addColorStop(at, `rgba(${rgb},${alpha})`)
+        g.fillStyle = fill; g.fillRect(0, 0, 64, 64)
+        sprites.set(key, image)
+      }
+      return image
+    }
+    const stamp = (image: HTMLCanvasElement, x: number, y: number, radius: number, alpha: number) => {
+      ctx.globalAlpha = alpha
+      ctx.drawImage(image, x - radius, y - radius, radius * 2, radius * 2)
+    }
+    // The jar's motes twinkle in place (opacity .45 to 1, scale .8 to 1.1, each on its own period), as
+    // many showing as the jar is full; a change fades over 600ms.
+    const jarBox = { x: JAR.base[0] - JAR.w / 2, y: JAR.base[1] - JAR.w * JAR.ratio, w: JAR.w, h: JAR.w * JAR.ratio }
+    const jarOn = JAR_MOTES.map(() => 0)
+    let jarPrimed = false // the first frame shows the jar as it is, without the fade
+    let clock = 0
     let size = { w: 0, h: 0, dpr: 1 }
     let raf = 0
+    let wait = 0
     let last = performance.now()
 
     const draw = (dt: number, still: boolean) => {
       const { geo: g, theme: t, sparks } = fx.current
       if (!g) return
-      const dpr = Math.min(2, window.devicePixelRatio || 1)
+      const dpr = 1
       if (size.w !== g.W || size.h !== g.H || size.dpr !== dpr) {
         size = { w: g.W, h: g.H, dpr }
         canvas.width = Math.round(g.W * dpr)
@@ -428,9 +463,29 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
         if (!still) { d.t += 0.01 * dt * d.sp; d.y += 0.12 * d.sp * dt; if (d.y > 985) d.y = 580 }
         const x = shaftX(d.y, d.u) + Math.sin(d.t * 2.1) * 10
         const a = dustA * (0.5 + 0.5 * Math.sin(d.t * 3.7)) * Math.min(1, (d.y - 580) / 60)
-        ctx.fillStyle = light ? `rgba(255,236,200,${a.toFixed(3)})` : `rgba(200,220,255,${a.toFixed(3)})`
-        ctx.beginPath(); ctx.arc(x, d.y, d.r, 0, 6.283); ctx.fill()
+        stamp(sprite(light ? '255,236,200' : '200,220,255', DOT), x, d.y, d.r, a)
       }
+      if (!still) clock += dt * 16.7
+      const unit = 1 / g.S // one screen px, in plate px
+      ctx.globalCompositeOperation = 'screen' // the motes were screened onto the jar; added up they blow out
+      for (let i = 0; i < JAR_MOTES.length; i += 1) {
+        const m = JAR_MOTES[i]
+        const want = i < fx.current.jarMotes ? 1 : 0
+        jarOn[i] = still || !jarPrimed ? want : want > jarOn[i] ? Math.min(want, jarOn[i] + dt * 16.7 / 600) : Math.max(want, jarOn[i] - dt * 16.7 / 600)
+        if (!jarOn[i]) continue
+        const phase = ((clock / 1000 - m.o) / m.d) % 2
+        const u = phase > 1 ? 2 - phase : phase
+        const e = fx.current.reduced ? 1 : u * u * (3 - 2 * u)
+        const scale = (fx.current.reduced ? 1 : 0.8 + 0.3 * e) * unit
+        const x = jarBox.x + m.x / 100 * jarBox.w
+        const y = jarBox.y + m.y / 100 * jarBox.h
+        const alpha = (0.45 + 0.55 * e) * jarOn[i]
+        // a 4px point with a `0 0 6px 2px` glow, as the motes were drawn in CSS
+        stamp(sprite('255,214,140', [[0, 0.55], [0.4, 0.34], [0.7, 0.1], [1, 0]]), x, y, 11 * scale, alpha)
+        stamp(sprite('255,246,216', DOT), x, y, 2 * scale, alpha)
+      }
+      ctx.globalCompositeOperation = 'lighter'
+      jarPrimed = true
       for (let i = flies.length - 1; i >= 0; i -= 1) {
         const f = flies[i]
         if (f.life <= 0) { flies.splice(i, 1); continue }
@@ -439,52 +494,111 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
           f.x += (f.vx + Math.sin(f.t * 1.7) * 0.25) * dt
           f.y += (f.vy + Math.cos(f.t * 1.3) * 0.2) * dt
           f.a += (((Math.sin(f.t * 3) + 1) / 2) ** 2 - f.a) * 0.05 * dt
+          // A fly that wanders well out of its zone fades out, and a new one is born in a zone.
+          const { home } = f
+          if (f.x < home.x - 80 || f.x > home.x + home.w + 80 || f.y < home.y - 80 || f.y > home.y + home.h + 80) f.life -= 0.01 * dt
         }
         const a = f.a * 0.9 * Math.min(1, f.life)
-        const [cr, cg, cb] = light ? [255, 240, 200] : f.c
-        const glow = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 6)
-        glow.addColorStop(0, `rgba(${cr},${cg},${cb},${(a * 0.9).toFixed(3)})`)
-        glow.addColorStop(0.3, `rgba(${cr},${cg},${cb},${(a * 0.35).toFixed(3)})`)
-        glow.addColorStop(1, `rgba(${cr},${cg},${cb},0)`)
-        ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * 6, 0, 6.283); ctx.fill()
-        ctx.fillStyle = `rgba(255,255,240,${(a * 0.9).toFixed(3)})`; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * 0.7, 0, 6.283); ctx.fill()
+        stamp(sprite(light ? '255,240,200' : f.c.join(','), GLOW), f.x, f.y, f.r * 6, a)
+        stamp(sprite('255,255,240', DOT), f.x, f.y, f.r * 0.7, a * 0.9)
       }
       for (let i = sparks.length - 1; i >= 0; i -= 1) {
         const s = sparks[i]
-        s.x += s.vx * dt; s.y += s.vy * dt; s.vy -= 0.02 * dt; s.vx *= 0.985; s.life -= 0.022 * dt
+        s.x += s.vx * dt; s.y += s.vy * dt; s.vy -= 0.02 * dt; s.vx *= 0.985 ** dt; s.life -= 0.022 * dt
         if (s.life <= 0) { sparks.splice(i, 1); continue }
-        ctx.fillStyle = `rgba(255,225,160,${(s.life * 0.9).toFixed(3)})`
-        ctx.beginPath(); ctx.arc(s.x, s.y, 2 + s.life * 1.5, 0, 6.283); ctx.fill()
+        stamp(sprite('255,225,160', DOT), s.x, s.y, 2 + s.life * 1.5, s.life * 0.9)
       }
+      ctx.globalAlpha = 1
       ctx.globalCompositeOperation = 'source-over'
+      if (!still && !fx.current.reduced) breathe(clock / 1000)
+    }
+    // Hearth breathes and sways (by energy); Cinder breathes, slower asleep.
+    const breathe = (t: number) => {
+      const scene = sceneRef.current
+      if (!scene) return
+      const wave = (period: number) => (1 - Math.cos((t / period) * Math.PI * 2)) / 2
+      const hearth = scene.querySelector<HTMLElement>('.sanc-hearth .breath')
+      if (hearth) {
+        const m = HEARTH_MOTION[fx.current.energy]
+        const b = wave(m.breath)
+        const sway = m.sway * Math.sin((t / m.swayPeriod) * Math.PI * 2)
+        hearth.style.transform = `rotate(${sway.toFixed(3)}deg) scale(${(1 + 0.008 * b).toFixed(4)}, ${(1 - 0.015 * b).toFixed(4)})`
+      }
+      const cinder = scene.querySelector<HTMLElement>('.sanc-cinder .breath')
+      if (cinder) {
+        const b = wave(cinder.closest('.is-asleep') ? 6 : 4.2)
+        cinder.style.transform = `scale(${(1 + 0.008 * b).toFixed(4)}, ${(1 - 0.015 * b).toFixed(4)})`
+      }
     }
 
-    // Reduced motion draws still frames and only runs while sparks are flying.
-    const live = () => !document.hidden && (!fx.current.reduced || fx.current.sparks.length > 0)
+    // Reduced motion draws still frames and only runs while sparks are flying; so does a resting page,
+    // which keeps its last frame.
+    const live = () => !document.hidden && (fx.current.sparks.length > 0 || (!fx.current.reduced && !fx.current.rest))
+    const stop = () => { cancelAnimationFrame(raf); clearTimeout(wait); raf = 0; wait = 0 }
     const frame = (now: number) => {
       raf = 0
-      const dt = Math.min(50, now - last) / 16.7
+      const dt = Math.min(70, now - last) / 16.7
       last = now
       draw(dt, false)
-      if (live()) raf = requestAnimationFrame(frame)
-      else if (fx.current.reduced) draw(0, true)
+      if (!live()) { if (fx.current.reduced) draw(0, true); return }
+      // Waiting before asking for the next frame skips most of them: the main thread and the compositor
+      // only wake at about 13 fps for the fireflies and the breath.
+      if (fx.current.sparks.length > 0) raf = requestAnimationFrame(frame)
+      else wait = window.setTimeout(() => { wait = 0; raf = requestAnimationFrame(frame) }, FRAME_GAP)
     }
     const kick = () => {
-      if (raf || document.hidden) return
+      if (raf || wait || document.hidden) return
       if (live()) { last = performance.now(); raf = requestAnimationFrame(frame) } else draw(0, true)
     }
     fx.current.kick = kick
-    const onVisibility = () => { if (document.hidden) { cancelAnimationFrame(raf); raf = 0 } else kick() }
+    const onVisibility = () => { if (document.hidden) stop(); else kick() }
     document.addEventListener('visibilitychange', onVisibility)
     kick()
     return () => {
-      cancelAnimationFrame(raf)
+      stop()
       document.removeEventListener('visibilitychange', onVisibility)
       fx.current.kick = () => {}
     }
   }, [])
   // Redraw (or restart) when what the canvas depends on changes.
-  useEffect(() => { fx.current.kick() }, [geo, theme, reduced, stats.energyState])
+  useEffect(() => { fx.current.kick() }, [geo, theme, reduced, stats.energyState, jarMotes])
+
+  /* ---------- Rest: while another app is in front, or nobody has moved for 45 seconds, the canvas
+     stops and the breath holds where it is.
+     Any pointer or key wakes them at once; a click's reaction always plays. ---------- */
+  const [still, setStill] = useState(false)
+  useEffect(() => {
+    let idle = false
+    let timer = 0
+    let armedAt = 0
+    const apply = () => {
+      const rest = idle || activity().away
+      setStill(rest)
+      fx.current.rest = rest
+      if (!rest) fx.current.kick()
+    }
+    const arm = () => {
+      clearTimeout(timer)
+      armedAt = performance.now()
+      timer = window.setTimeout(() => { idle = true; apply() }, IDLE_MS)
+    }
+    const onInput = () => {
+      if (idle) { idle = false; apply() }
+      if (performance.now() - armedAt > 1000) arm() // pointermove is frequent; re-arm at most once a second
+    }
+    // Coming back to the window counts as activity: the idle clock starts again.
+    const offAway = onActivity(() => { if (!activity().away) onInput(); apply() })
+    const events = ['pointermove', 'pointerdown', 'keydown', 'wheel'] as const
+    events.forEach((name) => window.addEventListener(name, onInput, { passive: true, capture: true }))
+    arm()
+    apply()
+    return () => {
+      clearTimeout(timer)
+      events.forEach((name) => window.removeEventListener(name, onInput, { capture: true }))
+      offAway()
+      fx.current.rest = false
+    }
+  }, [])
 
   /* ---------- Derived view values ---------- */
   const lit = (i: number) => i < stats.lanterns ? 1 : i === stats.lanterns ? stats.partial : 0
@@ -632,10 +746,8 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
   return (
     <main className="content-area sanctuary-page" data-energy={stats.energyState} data-cinder={cinderAway ? 'away' : 'home'} style={pageStyle}>
       <div
-        className={`sanc-scene ${geo ? 'is-ready' : ''}`}
+        className={`sanc-scene ${geo ? 'is-ready' : ''} ${still ? 'is-still' : ''}`}
         ref={sceneRef}
-        onPointerMove={onPointerMove}
-        onPointerLeave={resetParallax}
         onClick={closeCard}
       >
         <div className="sanc-world" ref={worldRef}>
@@ -656,7 +768,7 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
               <filter id="sancBlur2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2" /></filter>
               <filter id="sancBlur6" x="-100%" y="-30%" width="300%" height="160%"><feGaussianBlur stdDeviation="6" /></filter>
             </defs>
-            <g className="sanc-shaft" filter="url(#sancBlur14)" opacity=".9">
+            <g filter="url(#sancBlur14)" opacity=".92">
               <polygon points="860,600 1290,560 1160,992 340,992" fill="url(#sancShaft)" />
               <polygon points="980,590 1200,575 1080,992 760,992" fill="url(#sancShaft)" opacity=".6" />
             </g>
@@ -680,7 +792,7 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
             })}
             <path d={`M${GROWTH.x} ${GROWTH.bottom} V ${sapLevel}`} stroke="#ffb24a" strokeWidth={9} fill="none" strokeLinecap="round" opacity={0.5} filter="url(#sancBlur6)" />
             <path d={`M${GROWTH.x} ${GROWTH.bottom} V ${sapLevel}`} stroke="url(#sancSap)" strokeWidth={2.4} fill="none" strokeLinecap="round" />
-            <circle className="sanc-sap-tip" cx={GROWTH.x} cy={sapLevel} r={4.5} fill="#fff0c8" filter="url(#sancBlur2)" />
+            <circle cx={GROWTH.x} cy={sapLevel} r={4.5} fill="#fff0c8" filter="url(#sancBlur2)" opacity={0.85} />
           </svg>
 
           {/* Keepsakes and the glimmer jar: Sol's cut-outs placed in plate space */}
@@ -714,9 +826,6 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
             <img src={jarHalf} alt="" draggable={false} style={{ opacity: smooth(jarLevel, 0.1, 0.45) }} />
             <img src={jarFull} alt="" draggable={false} style={{ opacity: smooth(jarLevel, 0.5, 0.95) }} />
             <i className="shadow" />
-            <span className="motes">
-              {JAR_MOTES.map((mote, i) => <i key={i} style={{ left: `${mote.x}%`, top: `${mote.y}%`, opacity: i < jarMotes ? 1 : 0, '--d': `${mote.d.toFixed(2)}s`, '--o': `${mote.o.toFixed(2)}s` } as CSSProperties} />)}
-            </span>
           </div>
 
           {/* Ink layer: lantern flames and the carved growth marks */}
@@ -732,7 +841,7 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
             </g>
             {LAMPS.map((lamp, i) => (
               <g key={i} className="sanc-lamp" style={{ '--lit': lit(i).toFixed(2) } as CSSProperties}>
-                <ellipse className="flame" cx={lamp.x} cy={lamp.fy} rx={6} ry={12} fill="#ffe9b0" filter="url(#sancBlur3)" style={{ animationDelay: `${FLAME_DELAYS[i].toFixed(2)}s` }} />
+                <ellipse className="flame" cx={lamp.x} cy={lamp.fy} rx={6} ry={12} fill="#ffe9b0" filter="url(#sancBlur3)" />
                 <ellipse className="flame" cx={lamp.x} cy={lamp.fy} rx={3.6} ry={8} fill="#fff8e6" filter="url(#sancBlur2)" />
                 <ellipse className="core" cx={lamp.x} cy={lamp.fy + 2} rx={1.6} ry={4} fill="#ffffff" />
               </g>
@@ -818,9 +927,6 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
                 {SPORES.map((style, i) => <i key={i} style={style} />)}
               </div>
             </div></div></div></div>
-            <div className="orbit">
-              {ORBIT.map((spark, i) => <i key={i} style={{ '--r': `${spark.r.toFixed(0)}px`, '--d': `${spark.d.toFixed(1)}s`, '--o': `${spark.o.toFixed(1)}s` } as CSSProperties} />)}
-            </div>
             <button
               className="sanc-poke"
               style={{ width: hW * 0.72, height: hH * 0.96 }}

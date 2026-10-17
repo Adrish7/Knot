@@ -26,11 +26,11 @@ export const WHATS_NEW: TourStep[] = [
   },
   {
     view: 'sanctuary', target: 'lanterns', title: 'Hearth and the lanterns', sides: ['right', 'below'], pad: 8, radius: 16,
-    body: 'Every 45 minutes of focus lights a lantern; five is 3 h 45 m. They go out at 6 AM. Click Hearth and it says how much today has.',
+    body: 'Every 72 minutes of focus lights a lantern; all five is a 6 h day. They go out at 6 AM. Click Hearth and it says how much today has.',
   },
   {
     view: 'sanctuary', target: 'growth', title: 'Growth and glimmers', sides: ['right', 'below', 'left'], pad: 8, radius: 14,
-    body: 'The marks on the trunk are the long run: your focus hours, all time. Hearth is a Sprout until 10 h, Hearth until 60 h, then Elder. Every 10 minutes also drops a glimmer in the jar; spend them on the faint keepsakes.',
+    body: 'The marks on the trunk are the long run: your focus hours, all time. Hearth is a Sprout until 20 h, Hearth until 150 h, then Elder. Every 15 minutes also drops a glimmer in the jar; spend them on the faint keepsakes.',
   },
   {
     view: 'stopwatch', target: 'cinder', title: 'Cinder on the Stopwatch', sides: ['right', 'left', 'above'], pad: 10, radius: 16,
@@ -38,7 +38,7 @@ export const WHATS_NEW: TourStep[] = [
   },
   {
     view: null, target: 'foot-buddy', title: 'Hearth in the sidebar', sides: ['right', 'above'], pad: 6, radius: '50%',
-    body: 'Opens the Sanctuary from any page. This tour is under ? on the Sanctuary and in Settings.',
+    body: 'Opens the Sanctuary from any page. This tour is under ? on the Sanctuary and in Settings, where you can also turn the Sanctuary and buddies off.',
   },
 ]
 

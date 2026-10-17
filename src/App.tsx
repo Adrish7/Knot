@@ -1,11 +1,10 @@
 import { CalendarDays, CheckCircle2, CircleHelp, FolderOpen, Inbox, MoonStar, Pencil, Search, Star, Sun, Timer, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Board } from './components/Board'
 import { CalendarPage } from './components/CalendarPage'
 import { Completed } from './components/Completed'
 import { Header } from './components/Header'
 import { ConfirmModal, CreateListModal, RenameListModal } from './components/Modal'
-import { SanctuaryPage } from './components/sanctuary/SanctuaryPage'
 import { Sidebar } from './components/Sidebar'
 import { StopwatchPage } from './components/StopwatchPage'
 import { TaskPanel } from './components/TaskPanel'
@@ -15,12 +14,17 @@ import { TagsContext, type TagsApi } from './components/Tags'
 import { Trash } from './components/Trash'
 import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sortFocusDay, sortStarred, uid } from './data'
 import { dateKey, dayKeyOf, isForToday, parseDateKey, todayDate, todayKey } from './format'
+import { useActivity } from './activity'
 import { useNow } from './useNow'
 import { useUpdate } from './useUpdate'
 import { KEEPSAKES, SANCTUARY_TOUR, raisedMarks, sanctuaryStats } from './sanctuary'
 import { dayBalance, sortTags } from './tags'
 import { emptyTrack, formatSpent, isRunning, mergeTracks, pauseTrack, setTotalSeconds, startTrack, totalSeconds } from './time'
 import type { DeletedTask, FocusStatus, KnotData, Tag, Task, TaskList, ThemeMode, TimeTrack, ViewId } from './types'
+
+// The Sanctuary's page, scene and wood chrome load the first time it opens, so with it turned off
+// (Settings) none of it is fetched, parsed or drawn.
+const SanctuaryPage = lazy(() => import('./components/sanctuary/SanctuaryPage').then((module) => ({ default: module.SanctuaryPage })))
 
 const STORAGE_KEY = 'knot.desktop.data'
 const longDate = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
@@ -220,25 +224,29 @@ function App() {
   const anyRunning = isRunning(data.stopwatch) || data.tasks.some((task) => isRunning(task.time))
   // Keeps the Stopwatch page's header total current while something runs.
   const headerNow = useNow(anyRunning && selectedView === 'stopwatch', 15_000)
+  // The display stays awake while a running stopwatch is on screen, not once the window is hidden.
+  const { hidden } = useActivity()
   useEffect(() => {
-    const awake = anyRunning && selectedView === 'stopwatch'
+    const awake = anyRunning && selectedView === 'stopwatch' && !hidden
     window.knot?.keepAwake?.(awake).catch(() => {})
     return () => { if (awake) window.knot?.keepAwake?.(false).catch(() => {}) }
-  }, [anyRunning, selectedView])
+  }, [anyRunning, selectedView, hidden])
 
   // The Sanctuary's figures follow the clock while a stopwatch runs (the lanterns fill as you work).
-  const sanctuaryNow = useNow(anyRunning, 30_000)
+  // Turned off, nothing of it is worked out.
+  const sanctuaryOn = data.preferences.sanctuary
+  const sanctuaryNow = useNow(sanctuaryOn && anyRunning, 30_000)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const sanctuary = useMemo(() => sanctuaryStats(data, sanctuaryNow), [data, sanctuaryNow, clockTick])
+  const sanctuary = useMemo(() => sanctuaryOn ? sanctuaryStats(data, sanctuaryNow) : null, [sanctuaryOn, data, sanctuaryNow, clockTick])
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated || !sanctuary) return
     const raised = raisedMarks(data.sanctuary, sanctuary)
     if (raised) setData((current) => ({ ...current, sanctuary: { ...current.sanctuary, bestGrowth: Math.max(current.sanctuary.bestGrowth, raised.bestGrowth), bestEarned: Math.max(current.sanctuary.bestEarned, raised.bestEarned) } }))
   }, [hydrated, sanctuary, data.sanctuary])
 
   const buyKeepsake = (id: string) => {
     const keepsake = KEEPSAKES.find((item) => item.id === id)
-    if (!keepsake || data.sanctuary.keepsakes.includes(id) || sanctuary.balance < keepsake.price) return false
+    if (!keepsake || !sanctuary || data.sanctuary.keepsakes.includes(id) || sanctuary.balance < keepsake.price) return false
     setData((current) => ({ ...current, sanctuary: { ...current.sanctuary, keepsakes: [...current.sanctuary.keepsakes, id], spent: current.sanctuary.spent + keepsake.price } }))
     return true
   }
@@ -254,7 +262,7 @@ function App() {
     markTourSeen(SANCTUARY_TOUR)
   }
   useEffect(() => {
-    if (!hydrated || data.sanctuary.tourSeen.includes(SANCTUARY_TOUR)) return
+    if (!hydrated || !data.preferences.sanctuary || data.sanctuary.tourSeen.includes(SANCTUARY_TOUR)) return
     const timer = window.setTimeout(() => setTour((current) => current ?? { step: 0, returnTo: selectedView }), 700)
     return () => window.clearTimeout(timer)
     // Only once the saved data is in.
@@ -311,7 +319,7 @@ function App() {
   const completedTasks = useMemo(() => data.tasks.filter((task) => task.listId !== null && task.completed), [data.tasks])
   const doneCounts = useMemo(() => completedTasks.reduce<Record<string, number>>((counts, task) => { if (task.listId) counts[task.listId] = (counts[task.listId] ?? 0) + 1; return counts }, {}), [completedTasks])
   const searching = Boolean(query.trim())
-  const sanctuaryOpen = selectedView === 'sanctuary' && !searching
+  const sanctuaryOpen = sanctuaryOn && selectedView === 'sanctuary' && !searching
   const activeListId = selectedView.startsWith('list:') ? selectedView.slice(5) : null
   const activeList = sortedLists.find((list) => list.id === activeListId)
 
@@ -794,6 +802,16 @@ function App() {
     })
   }
 
+  // Off: the Sanctuary leaves the sidebar, Hearth and Cinder go, and none of it is loaded or worked
+  // out. Nothing is lost; it is all derived from focus time, so turning it back on picks up as before.
+  const setSanctuaryOn = (on: boolean) => {
+    if (on === data.preferences.sanctuary) return
+    updatePreferences({ sanctuary: on })
+    if (!on && selectedView === 'sanctuary') setSelectedView('today')
+    if (!on) setTour(null)
+    showToast(on ? 'Sanctuary turned on' : 'Sanctuary turned off')
+  }
+
   const setTheme = (theme: ThemeMode) => {
     if (theme === data.preferences.theme) return
     updatePreferences({ theme })
@@ -865,7 +883,7 @@ function App() {
   return (
     <TagsContext.Provider value={tagsApi}>
       <div
-        className={`app-shell ${data.preferences.sidebarCollapsed ? 'sidebar-collapsed' : ''} ${activeList ? 'is-accented' : ''} ${selectedView === 'sanctuary' && !searching ? 'is-sanctuary' : ''}`}
+        className={`app-shell ${data.preferences.sidebarCollapsed ? 'sidebar-collapsed' : ''} ${activeList ? 'is-accented' : ''} ${sanctuaryOpen ? 'is-sanctuary' : ''}`}
         style={activeList ? { '--list-accent': activeList.color } as React.CSSProperties : undefined}
         onMouseDown={() => listMenu && setListMenu(null)}
       >
@@ -892,7 +910,9 @@ function App() {
           onExport={window.knot ? exportData : undefined}
           onImport={window.knot ? importData : undefined}
           updates={updates}
-          buddy={{ state: sanctuary.energyState, stage: sanctuary.growth.stage.id, here: sanctuaryOpen }}
+          buddy={sanctuary ? { state: sanctuary.energyState, stage: sanctuary.growth.stage.id, here: sanctuaryOpen } : null}
+          sanctuaryOn={sanctuaryOn}
+          onSanctuary={setSanctuaryOn}
           onBuddy={() => { if (sanctuaryOpen) setHearthPoke((n) => n + 1); else { setSelectedView('sanctuary'); setQuery(''); setQuickAddListId(null) } }}
           onShowWhatsNew={openTour}
         />
@@ -906,13 +926,13 @@ function App() {
             showSort={page.mode !== 'smart' || selectedView === 'today' || selectedView === 'starred'}
             onSort={(sortMode) => updatePreferences({ sortMode })}
             onRenameTitle={!searching && activeList ? (name) => renameListById(activeList.id, name) : undefined}
-            aside={selectedView === 'sanctuary' && !searching ? <>
+            aside={sanctuaryOpen ? <>
               <button className="icon-button" onClick={openTour} title="What’s new" aria-label="What’s new"><CircleHelp size={16} /></button>
             </> : undefined}
           />
           {selectedView === 'completed' ? <Completed tasks={completedTasks} lists={sortedLists} onOpen={setSelectedTaskId} onReopen={(taskId) => completeTask(taskId, false)} onDelete={deleteTask} onSetTimeSpent={adjustStopwatch} onStopwatch={openStopwatchFor} onClear={clearCompleted} />
             : selectedView === 'trash' ? <Trash entries={data.trash} onRestore={restoreTask} onPurge={purgeTask} onEmpty={emptyTrash} />
-            : selectedView === 'sanctuary' && !searching ? <SanctuaryPage stats={sanctuary} state={data.sanctuary} cinderAway={anyRunning} onBuy={buyKeepsake} poke={hearthPoke} />
+            : sanctuaryOpen && sanctuary ? <Suspense fallback={<div className="sanctuary-page" />}><SanctuaryPage stats={sanctuary} state={data.sanctuary} cinderAway={anyRunning} onBuy={buyKeepsake} poke={hearthPoke} /></Suspense>
             : selectedView === 'stopwatch' && !searching ? <StopwatchPage
               tasks={data.tasks}
               lists={sortedLists}
@@ -929,6 +949,7 @@ function App() {
               onSetTags={(taskId, tagIds) => updateTask(taskId, { tagIds })}
               onSetDone={setDoneToday}
               onReorder={reorderStopwatch}
+              buddies={sanctuaryOn}
             />
             : selectedView === 'calendar' && !searching ? <CalendarPage
               tasks={data.tasks}

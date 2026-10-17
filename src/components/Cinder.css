@@ -24,7 +24,8 @@
 
 /* motion: breath and the flame's flicker; a single hop on a cheer */
 .cinder-rig { position: absolute; inset: 0; transform-origin: 50% 100%; animation: cinder-breathe 4.2s ease-in-out infinite; }
-.cinder.is-asleep .cinder-rig { animation-duration: 6.2s; }
+/* Asleep (nothing runs), it holds still: no breath, no flicker. */
+.cinder.is-asleep .cinder-rig, .cinder.is-asleep .cinder-halo { animation: none; }
 .cinder.is-break .cinder-rig { animation-duration: 5s; }
 .cinder.is-cheer .cinder-rig { animation: cinder-hop 760ms cubic-bezier(0.3, 0.9, 0.3, 1) 1; }
 .cinder.is-cheer .cinder-halo { animation: cinder-flare 1100ms var(--ease) 1; }

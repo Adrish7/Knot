@@ -30,13 +30,14 @@ interface StopwatchPageProps {
   onSetTags: (taskId: string, tagIds: string[]) => void
   onSetDone: (taskId: string, done: boolean) => void // done for today
   onReorder: (taskIds: string[]) => void // the Today rows in their new order
+  buddies: boolean // Cinder stands beside the basin; off with the Sanctuary
 }
 
 const OPEN_COLOR = 'var(--c-timer)'
 const OPEN_VALUE = '__open' // the open stopwatch in the change-task <select>
 const clockTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
 
-export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, onPause, onReset, onAdjust, onMoveOpenToTask, onOpenTask, onAddTask, onSetTags, onSetDone, onReorder }: StopwatchPageProps) {
+export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, onPause, onReset, onAdjust, onMoveOpenToTask, onOpenTask, onAddTask, onSetTags, onSetDone, onReorder, buddies }: StopwatchPageProps) {
   const { tags } = useTags()
   const [adding, setAdding] = useState(false)
   const [dragged, setDragged] = useState<string | null>(null)
@@ -287,7 +288,7 @@ export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, o
                 </>
               )}
           </div>
-          <Cinder className="sw-cinder" pose={pose} focus={pose === 'cheer' ? 1 : companion.focus} line={cinderSays} onPoke={pokeCinder} data-tour="cinder" />
+          {buddies && <Cinder className="sw-cinder" pose={pose} focus={pose === 'cheer' ? 1 : companion.focus} line={cinderSays} onPoke={pokeCinder} data-tour="cinder" />}
           {offerBreak && (
             <div className="sw-break-note" role="status">
               {Math.round(companion.unbrokenSeconds / 60)} min without a break.

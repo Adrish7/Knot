@@ -13,17 +13,18 @@ export type EnergyState = 'asleep' | 'stirring' | 'awake' | 'lively' | 'radiant'
 export type GrowthStage = 'sprout' | 'hearth' | 'elder'
 
 export const LANTERNS = 5
-export const LANTERN_MINUTES = 45 // one lantern per 45 minutes of focus today; all five at 3 h 45 m
-export const GLIMMER_MINUTES = 10 // one glimmer per 10 minutes of focus
+export const LANTERN_MINUTES = 72 // one lantern per 72 minutes of focus today; all five at 6 h
+export const GLIMMER_MINUTES = 15 // one glimmer per 15 minutes of focus
 
-// The rules the stored high-water marks were made under. Marks from older rules (which also counted
-// finished tasks and focus days) are dropped and rebuilt from focus time.
-const RULES = 2
+// The rules the stored high-water marks were made under. Marks from older rules (rule 1 also counted
+// finished tasks and focus days; rule 2 paid a glimmer per 10 minutes) are dropped and rebuilt from
+// focus time.
+const RULES = 3
 
 export const GROWTH_STAGES: { id: GrowthStage; name: string; from: number }[] = [
   { id: 'sprout', name: 'Sprout', from: 0 },
-  { id: 'hearth', name: 'Hearth', from: 10 },
-  { id: 'elder', name: 'Elder', from: 60 },
+  { id: 'hearth', name: 'Hearth', from: 20 },
+  { id: 'elder', name: 'Elder', from: 150 },
 ]
 
 // Unbroken focus longer than this gets a quiet offer of a break. Gaps shorter than BREAK_GAP don't
@@ -31,8 +32,8 @@ export const GROWTH_STAGES: { id: GrowthStage; name: string; from: number }[] = 
 export const LONG_FOCUS_SECONDS = 50 * 60
 const BREAK_GAP_SECONDS = 5 * 60
 
-// Prices are whole hours of focus at six glimmers an hour (the starter pair is free): 408 in all,
-// about 68 hours, so the hollow fills around when Hearth becomes an Elder.
+// Prices are whole hours of focus at four glimmers an hour (the starter pair is free): 612 in all,
+// 153 hours, so the hollow fills around when Hearth becomes an Elder (about five weeks of 6 h days).
 export interface Keepsake {
   id: string
   name: string
@@ -43,18 +44,18 @@ export interface Keepsake {
 export const KEEPSAKES: Keepsake[] = [
   { id: 'pebble', name: 'Pebble', price: 0, description: 'A smooth river stone.' },
   { id: 'vase', name: 'Clay vase', price: 0, description: 'A small clay vase.' },
-  { id: 'sprout', name: 'Potted sprout', price: 12, description: 'A two-leaf sprout in a clay pot.' },
-  { id: 'teacup', name: 'Acorn teacup', price: 18, description: 'An acorn cup for tea on a break.' },
-  { id: 'starjar', name: 'Star jar', price: 24, description: 'A glass jar with a small star inside.' },
-  { id: 'book', name: 'Little book', price: 36, description: 'A pocket book, left open.' },
-  { id: 'mushroom', name: 'Mushroom lamp', price: 48, description: 'A toadstool that glows at night.' },
-  { id: 'moth', name: 'Lantern moth', price: 60, description: 'Rests on the window rim and glows after dark.' },
-  { id: 'chime', name: 'Glass wind chime', price: 90, description: 'Hangs by the moon window.' },
-  { id: 'telescope', name: 'Brass telescope', price: 120, description: 'Points out of the moon window.' },
+  { id: 'sprout', name: 'Potted sprout', price: 16, description: 'A two-leaf sprout in a clay pot.' },
+  { id: 'teacup', name: 'Acorn teacup', price: 28, description: 'An acorn cup for tea on a break.' },
+  { id: 'starjar', name: 'Star jar', price: 36, description: 'A glass jar with a small star inside.' },
+  { id: 'book', name: 'Little book', price: 52, description: 'A pocket book, left open.' },
+  { id: 'mushroom', name: 'Mushroom lamp', price: 72, description: 'A toadstool that glows at night.' },
+  { id: 'moth', name: 'Lantern moth', price: 92, description: 'Rests on the window rim and glows after dark.' },
+  { id: 'chime', name: 'Glass wind chime', price: 136, description: 'Hangs by the moon window.' },
+  { id: 'telescope', name: 'Brass telescope', price: 180, description: 'Points out of the moon window.' },
 ]
 
 export const STARTER_KEEPSAKES = ['pebble', 'vase']
-export const SANCTUARY_TOUR = 'sanctuary-v2'
+export const SANCTUARY_TOUR = 'sanctuary-v3'
 
 export function emptySanctuary(): SanctuaryState {
   return { keepsakes: [...STARTER_KEEPSAKES], spent: 0, bestGrowth: 0, bestEarned: 0, rules: RULES, tourSeen: [] }

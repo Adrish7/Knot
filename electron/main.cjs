@@ -124,8 +124,8 @@ function createWindow() {
     title: 'Knot',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 18 },
-    vibrancy: process.platform === 'darwin' ? 'sidebar' : undefined,
-    visualEffectState: 'active',
+    // No vibrancy: the page is opaque, so it never showed, and macOS kept blurring the desktop behind
+    // the window even while Knot was in the background.
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
