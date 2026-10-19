@@ -109,7 +109,7 @@ export class InkController {
   private readonly motion: MediaQueryList
   private stats: FaceStats = { frames: 0, steps: 0, loop: false, frameMs: 0, avgMs: 0, maxMs: 0, gpuMs: null, sleeps: 0 }
   private disposed = false
-  private behind = false // seconds went by while away without their drops; the trail is re-laid on return
+  private behind = false // seconds went by while hidden without their drops; the trail is re-laid on return
   private readonly offActivity: () => void
 
   constructor(private readonly root: HTMLDivElement, private readonly canvas: HTMLCanvasElement, private readonly probe: HTMLElement, private readonly onSecond: (second: number) => void) {
@@ -204,11 +204,11 @@ export class InkController {
     this.render()
   }
 
-  // While another app is in front (or the window is hidden) the water holds still: the loop stops
-  // and the seconds' drops are skipped. The readout keeps counting. On return the trail is re-laid
-  // as it would look by now.
+  // While the window is hidden (minimised, another Space, fully covered) the water holds still: the
+  // loop stops and the seconds' drops are skipped. On return the trail is re-laid as it would look by
+  // now. With another app in front but the window visible, the basin keeps moving.
   private onVisibility = () => {
-    if (activity().away) { this.stop(); return }
+    if (activity().hidden) { this.stop(); return }
     if (this.behind && this.running && !this.reduced) this.seedTrail(this.shownSecond)
     this.behind = false
     this.wake(300)
@@ -281,7 +281,7 @@ export class InkController {
     this.shownSecond = whole
     this.onSecond(whole)
     if (!this.running) return
-    if (activity().away) { this.behind = true; return }
+    if (activity().hidden) { this.behind = true; return }
     const delta = whole - prev
     if (this.reduced) { this.renderStatic(); return }
     if (delta < 1 || delta > 3) { this.seedTrail(whole); return }
@@ -440,7 +440,7 @@ export class InkController {
     if (this.disposed) return
     const now = performance.now()
     this.activeUntil = Math.max(this.activeUntil, now + ms)
-    if (activity().away) {
+    if (activity().hidden) {
       // Nothing moves, but what was asked for (the trail on opening, a new colour) is drawn once.
       const fluid = this.fluid
       if (fluid && this.queue.length) { for (const fn of this.queue.splice(0)) fn(fluid); this.render() }
@@ -514,7 +514,7 @@ export class InkController {
     s.maxMs = Math.max(s.maxMs, cost)
     s.gpuMs = fluid?.timer.last ?? null
 
-    if (activity().away) { this.stop(); return }
+    if (activity().hidden) { this.stop(); return }
     if ((this.running && !this.reduced) || now < this.activeUntil || settling || this.pulses.length || this.queue.length) {
       this.loop = requestAnimationFrame(this.frame)
     } else if (this.running && this.reduced) {
