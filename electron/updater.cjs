@@ -16,7 +16,7 @@ const ASSET_NAME = 'Knot-mac-arm64.dmg'
 const DOWNLOAD_PREFIX = `https://github.com/${REPOSITORY}/releases/download/`
 const RECHECK_AFTER_MS = 15 * 60 * 1000
 
-let latest = null // { version, size, downloadUrl, releaseUrl } once a newer release has been seen
+let latest = null // { version, size, downloadUrl, releaseUrl, notes } once a newer release has been seen
 let checkedAt = 0
 let checking = null
 let installing = false
@@ -44,7 +44,8 @@ async function fetchLatestRelease() {
   if (!asset || typeof asset.browser_download_url !== 'string' || !asset.browser_download_url.startsWith(DOWNLOAD_PREFIX)) return null
   const version = String(release.tag_name).replace(/^v/, '')
   if (!isNewer(version, app.getVersion())) return null
-  return { version, size: Number(asset.size) || 0, downloadUrl: asset.browser_download_url, releaseUrl: release.html_url }
+  const notes = typeof release.body === 'string' ? release.body.trim().slice(0, 4000) : ''
+  return { version, size: Number(asset.size) || 0, downloadUrl: asset.browser_download_url, releaseUrl: release.html_url, notes }
 }
 
 // The newer release, or null. Only the packaged app checks; a development build is never "behind".

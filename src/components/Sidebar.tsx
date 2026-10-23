@@ -34,6 +34,7 @@ interface SidebarProps {
   onExport?: () => void
   onImport?: () => void
   updates: UpdateApi
+  onShowUpdate: () => void // opens the New update card at the top right
   buddy: { state: EnergyState; stage: GrowthStage; here: boolean } | null // here: the Sanctuary is open; null while it is turned off
   sanctuaryOn: boolean
   onSanctuary: (on: boolean) => void
@@ -41,7 +42,7 @@ interface SidebarProps {
   onShowWhatsNew: () => void
 }
 
-export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport, updates, buddy, sanctuaryOn, onSanctuary, onBuddy, onShowWhatsNew }: SidebarProps) {
+export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, completedCount, trashCount, launchAtLogin, theme, query, searchRef, onQuery, onSelect, onCreateList, onListMenu, onRenameList, onToggle, onLaunchAtLogin, onTheme, onExport, onImport, updates, onShowUpdate, buddy, sanctuaryOn, onSanctuary, onBuddy, onShowWhatsNew }: SidebarProps) {
   const [editingListId, setEditingListId] = useState<string | null>(null)
   const [draftListName, setDraftListName] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -180,12 +181,10 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
         {!collapsed && buddy && <HearthBadge state={buddy.state} stage={buddy.stage} here={buddy.here} cheer={cheer} onClick={onBuddy} />}
       </div>
 
-      {updates.update && <UpdateButton collapsed={collapsed} updates={updates} />}
-
       <div className="sidebar-footer" ref={footerRef}>
         <button className="new-list-button" onClick={onCreateList} title="New list"><Plus size={16} />{!collapsed && <span>New list</span>}</button>
         <div className="sidebar-footer-actions">
-          {updates.supported && <UpdateIcon updates={updates} />}
+          {updates.supported && <UpdateIcon updates={updates} onShowUpdate={onShowUpdate} />}
           <button className={`icon-button settings-button ${settingsOpen ? 'is-open' : ''}`} onClick={() => setSettingsOpen((open) => !open)} aria-label="Settings" aria-expanded={settingsOpen} aria-haspopup="dialog" title="Settings"><Settings2 size={16} /></button>
         </div>
         {settingsOpen && (
@@ -230,7 +229,7 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
               <div className="settings-version">
                 <span>{updates.version ? `Knot ${updates.version}` : 'Knot'}</span>
                 {updates.update
-                  ? <button onClick={updates.install} disabled={Boolean(updates.progress)}>Update to {updates.update.version}</button>
+                  ? <button onClick={() => { setSettingsOpen(false); onShowUpdate() }}>Update to {updates.update.version}</button>
                   : <button onClick={updates.checkNow} disabled={updates.checking}>{updates.checking ? 'Checking…' : 'Check for updates'}</button>}
               </div>
             </>}
@@ -241,43 +240,18 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
   )
 }
 
-// Shown above the footer once GitHub has a newer release. One click downloads it, installs it
-// over this copy and restarts; the row fills as the download progresses.
-function UpdateButton({ collapsed, updates }: { collapsed: boolean; updates: UpdateApi }) {
-  const { update, progress } = updates
-  if (!update) return null
-  const label = !progress ? 'Update Knot'
-    : progress.phase === 'downloading' ? 'Downloading update'
-    : progress.phase === 'installing' ? 'Installing update'
-    : 'Restarting…'
-  const detail = !progress ? update.version : progress.phase === 'downloading' ? `${Math.round(progress.fraction * 100)}%` : ''
-  return (
-    <button
-      className={`sidebar-update ${progress ? 'is-busy' : ''}`}
-      style={{ '--progress': `${Math.round((progress?.fraction ?? 0) * 100)}%` } as React.CSSProperties}
-      onClick={updates.install}
-      disabled={Boolean(progress)}
-      title={progress ? label : `Knot ${update.version} is available. Download it, install it and restart Knot.`}
-      aria-label={progress ? `${label} ${detail}`.trim() : `Update Knot to ${update.version} and restart`}
-    >
-      <CircleArrowDown />
-      {!collapsed && <><span>{label}</span><span className="nav-count">{detail}</span></>}
-    </button>
-  )
-}
-
 // Always in the footer, so updates never hide behind Settings: it checks for a new release, and
-// when one is out it turns accent with a dot and installs it like the Update Knot row.
-function UpdateIcon({ updates }: { updates: UpdateApi }) {
+// when one is out it turns accent with a dot and opens the New update card.
+function UpdateIcon({ updates, onShowUpdate }: { updates: UpdateApi; onShowUpdate: () => void }) {
   const { update, progress, checking, version } = updates
   const busy = Boolean(progress) || checking
   const title = update
-    ? `Update Knot to ${update.version} and restart`
+    ? `Knot ${update.version} is available`
     : checking ? 'Checking for updates…' : `${version ? `Knot ${version}. ` : ''}Check for updates`
   return (
     <button
       className={`icon-button update-icon ${update ? 'has-update' : ''} ${busy ? 'is-busy' : ''}`}
-      onClick={update ? updates.install : updates.checkNow}
+      onClick={update ? onShowUpdate : updates.checkNow}
       disabled={busy}
       title={title}
       aria-label={title}

@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, CircleHelp, FolderOpen, Inbox, MoonStar, Pencil, Search, Star, Sun, Timer, Trash2 } from 'lucide-react'
+import { CalendarDays, CheckCircle2, CircleHelp, FolderOpen, Inbox, Maximize2, MoonStar, Pencil, Search, Star, Sun, Timer, Trash2 } from 'lucide-react'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Board } from './components/Board'
 import { CalendarPage } from './components/CalendarPage'
@@ -12,6 +12,7 @@ import { Tour, WHATS_NEW } from './components/Tour'
 import { ListRing, listProgress } from './components/ListRing'
 import { TagsContext, type TagsApi } from './components/Tags'
 import { Trash } from './components/Trash'
+import { UpdateNotice } from './components/UpdateNotice'
 import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sortFocusDay, sortStarred, uid } from './data'
 import { dateKey, dayKeyOf, isForToday, parseDateKey, todayDate, todayKey } from './format'
 import { useActivity } from './activity'
@@ -117,6 +118,11 @@ function nextRepeat(source: Task, at = Date.now()): Pick<Task, 'dueAt' | 'remind
   return next ? { dueAt: null, reminderAt: null, focusDates: [dateKey(new Date(next))] } : null
 }
 
+// Whether a key press is going into a text field or a menu rather than to the app's shortcuts.
+function isTyping(target: EventTarget | null) {
+  return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+}
+
 function App() {
   const [data, setData] = useState<KnotData>(() => createSeedData())
   const [hydrated, setHydrated] = useState(false)
@@ -143,6 +149,9 @@ function App() {
     window.setTimeout(() => setToast((current) => current === message ? null : current), 2600)
   }
   const updates = useUpdate(showToast)
+  const [updateOpen, setUpdateOpen] = useState(false)
+  // The Stopwatch page's full screen: only the face, with the window in full screen as well.
+  const [stopwatchFull, setStopwatchFull] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -270,6 +279,25 @@ function App() {
   }, [hydrated])
   const markTourSeen = (id: string) => setData((current) => current.sanctuary.tourSeen.includes(id) ? current : { ...current, sanctuary: { ...current.sanctuary, tourSeen: [...current.sanctuary.tourSeen, id] } })
 
+  // Full screen asks for the whole screen (in Knot, the window's own full screen); leaving that
+  // any way at all (Esc, the green button, ⌃⌘F) leaves the full-screen stopwatch too. A window
+  // that was already full screen stays so.
+  const enterStopwatchFull = () => {
+    setStopwatchFull(true)
+    setSelectedTaskId(null)
+    setUpdateOpen(false)
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.()?.catch(() => {})
+  }
+  const exitStopwatchFull = () => {
+    setStopwatchFull(false)
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+  }
+  useEffect(() => {
+    const onChange = () => { if (!document.fullscreenElement) setStopwatchFull(false) }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
   useEffect(() => {
     if (!hydrated || !window.knot) return
     window.knot.setLaunchAtLogin(data.preferences.launchAtLogin).catch(() => showToast('Could not update the login item.'))
@@ -277,6 +305,13 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (stopwatchFull) return // the full-screen stopwatch takes its own keys
+      if (event.key.toLowerCase() === 'f' && !event.metaKey && !event.ctrlKey && !event.altKey && selectedView === 'stopwatch' && !query.trim()
+        && !isTyping(event.target) && !createListOpen && !renameList && !confirmAction && !tour) {
+        event.preventDefault()
+        enterStopwatchFull()
+        return
+      }
       if (event.metaKey && event.key.toLowerCase() === 'k') {
         event.preventDefault()
         searchRef.current?.focus()
@@ -298,7 +333,7 @@ function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [confirmAction, createListOpen, data.lists, listMenu, quickAddListId, renameList, selectedView])
+  }, [confirmAction, createListOpen, data.lists, listMenu, query, quickAddListId, renameList, selectedView, stopwatchFull, tour])
 
   const sortedLists = useMemo(() => [...data.lists].sort((a, b) => a.sortOrder - b.sortOrder), [data.lists])
   const sortedTags = useMemo(() => sortTags(data.tags), [data.tags])
@@ -319,6 +354,10 @@ function App() {
   const completedTasks = useMemo(() => data.tasks.filter((task) => task.listId !== null && task.completed), [data.tasks])
   const doneCounts = useMemo(() => completedTasks.reduce<Record<string, number>>((counts, task) => { if (task.listId) counts[task.listId] = (counts[task.listId] ?? 0) + 1; return counts }, {}), [completedTasks])
   const searching = Boolean(query.trim())
+  useEffect(() => {
+    if (stopwatchFull && (selectedView !== 'stopwatch' || searching)) exitStopwatchFull()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopwatchFull, selectedView, searching])
   const sanctuaryOpen = sanctuaryOn && selectedView === 'sanctuary' && !searching
   const activeListId = selectedView.startsWith('list:') ? selectedView.slice(5) : null
   const activeList = sortedLists.find((list) => list.id === activeListId)
@@ -910,6 +949,7 @@ function App() {
           onExport={window.knot ? exportData : undefined}
           onImport={window.knot ? importData : undefined}
           updates={updates}
+          onShowUpdate={() => setUpdateOpen(true)}
           buddy={sanctuary ? { state: sanctuary.energyState, stage: sanctuary.growth.stage.id, here: sanctuaryOpen } : null}
           sanctuaryOn={sanctuaryOn}
           onSanctuary={setSanctuaryOn}
@@ -917,6 +957,7 @@ function App() {
           onShowWhatsNew={openTour}
         />
         <section className="workspace">
+          <UpdateNotice updates={updates} open={updateOpen} onOpen={setUpdateOpen} stopwatchRunning={anyRunning} />
           <Header
             title={page.title}
             subline={page.subline}
@@ -928,7 +969,9 @@ function App() {
             onRenameTitle={!searching && activeList ? (name) => renameListById(activeList.id, name) : undefined}
             aside={sanctuaryOpen ? <>
               <button className="icon-button" onClick={openTour} title="What’s new" aria-label="What’s new"><CircleHelp size={16} /></button>
-            </> : undefined}
+            </> : selectedView === 'stopwatch' && !searching ? (
+              <button className="topbar-button" onClick={enterStopwatchFull} title="Show only the stopwatch, filling the screen (F)"><Maximize2 size={14} /><span>Full screen</span></button>
+            ) : undefined}
           />
           {selectedView === 'completed' ? <Completed tasks={completedTasks} lists={sortedLists} onOpen={setSelectedTaskId} onReopen={(taskId) => completeTask(taskId, false)} onDelete={deleteTask} onSetTimeSpent={adjustStopwatch} onStopwatch={openStopwatchFor} onClear={clearCompleted} />
             : selectedView === 'trash' ? <Trash entries={data.trash} onRestore={restoreTask} onPurge={purgeTask} onEmpty={emptyTrash} />
@@ -950,6 +993,8 @@ function App() {
               onSetDone={setDoneToday}
               onReorder={reorderStopwatch}
               buddies={sanctuaryOn}
+              fullScreen={stopwatchFull}
+              onExitFullScreen={exitStopwatchFull}
             />
             : selectedView === 'calendar' && !searching ? <CalendarPage
               tasks={data.tasks}

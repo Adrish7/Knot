@@ -4,9 +4,9 @@ Knot is a calm, native-feeling task manager for macOS. Lists, a Today view, a ca
 
 ## Download
 
-**[Download Knot 1.6.3 for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/latest/download/Knot-mac-arm64.dmg)**
+**[Download Knot 1.7.0 for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/latest/download/Knot-mac-arm64.dmg)**
 
-Latest version: **1.6.3**, released October 19, 2026 ([what's new](https://github.com/Adrish7/Knot/releases/tag/v1.6.3), [all releases](https://github.com/Adrish7/Knot/releases)). The link always downloads the newest release.
+Latest version: **1.7.0**, released October 23, 2026 ([what's new](https://github.com/Adrish7/Knot/releases/tag/v1.7.0), [all releases](https://github.com/Adrish7/Knot/releases)). The link always downloads the newest release.
 
 Requirements: an Apple Silicon Mac (M1 or later) running macOS 12 or newer. Intel Macs are not supported.
 
@@ -30,9 +30,9 @@ xattr -dr com.apple.quarantine /Applications/Knot.app
 
 ### Updating
 
-Knot 1.4.0 and later check for a new release when they open, every few hours, and when you switch back to Knot. When one is out, an **Update Knot** row appears at the bottom of the sidebar. Click it and Knot downloads the new version, replaces itself and restarts.
+Knot 1.4.0 and later check for a new release when they open, every few hours, and when you switch back to Knot. From 1.7.0, when one is out a blue **New update** button appears at the top right of the window, on every page. Click it to see what's in the new version, then click **Update and restart**: Knot downloads it, replaces itself and restarts. A running stopwatch keeps counting through the restart. In 1.4.0 to 1.6.x the same thing is an **Update Knot** row at the bottom of the sidebar.
 
-From 1.5.2 there is also an update button (an arrow in a circle) at the bottom of the sidebar, next to Settings, all the time. Click it to check for a new version. When one is out it turns blue with a dot, and clicking it installs the update. In 1.4.0 to 1.5.1, check by hand from Settings > **Check for updates**.
+From 1.5.2 there is also an update button (an arrow in a circle) at the bottom of the sidebar, next to Settings, all the time. Click it to check for a new version. When one is out it turns blue with a dot. In 1.4.0 to 1.5.1, check by hand from Settings > **Check for updates**.
 
 If Knot can't replace itself, for example because it isn't in your Applications folder, it opens the new disk image instead. Quit Knot and drag the new copy into Applications.
 
@@ -46,6 +46,7 @@ Your tasks are kept either way. They live in your Application Support folder, no
 - Today, Calendar, Starred, Completed, and Recently deleted views
 - Notes, subtasks, due date and time, reminders, recurrence, and time spent
 - A stopwatch for any task, plus an open stopwatch, with a day timeline of your sessions and per-day totals in the calendar
+- A full-screen stopwatch that shows only the timer, filling the screen: click **Full screen** on the Stopwatch page or press F. Space starts and pauses, Esc leaves
 - The Sanctuary: a painted tree hollow that fills with your focus time. Five lanterns light up over a 6 hour day, Hearth grows over the long run, and glimmers buy keepsakes for the hollow
 - Two buddies: Hearth keeps the hollow, and Cinder sits beside the stopwatch and offers a break after 50 minutes without one. Click either of them
 - Settings has a switch for the Sanctuary and buddies. Turned off, none of it is loaded, so Knot does less work

@@ -10,6 +10,7 @@ import { Cinder } from './Cinder'
 import { DayTimeline, type TimelineSpan } from './DayTimeline'
 import { InkFace } from './ink/InkFace'
 import { QuickAdd } from './QuickAdd'
+import { StopwatchFullScreen } from './StopwatchFullScreen'
 import { TagPicker, tagsOf, useTags } from './Tags'
 import { TimeSpentPicker } from './TimeSpentPicker'
 import type { Task, TaskList, TimeTrack } from '../types'
@@ -31,13 +32,15 @@ interface StopwatchPageProps {
   onSetDone: (taskId: string, done: boolean) => void // done for today
   onReorder: (taskIds: string[]) => void // the Today rows in their new order
   buddies: boolean // Cinder stands beside the basin; off with the Sanctuary
+  fullScreen: boolean // only the face, filling the screen
+  onExitFullScreen: () => void
 }
 
 const OPEN_COLOR = 'var(--c-timer)'
 const OPEN_VALUE = '__open' // the open stopwatch in the change-task <select>
 const clockTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
 
-export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, onPause, onReset, onAdjust, onMoveOpenToTask, onOpenTask, onAddTask, onSetTags, onSetDone, onReorder, buddies }: StopwatchPageProps) {
+export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, onPause, onReset, onAdjust, onMoveOpenToTask, onOpenTask, onAddTask, onSetTags, onSetDone, onReorder, buddies, fullScreen, onExitFullScreen }: StopwatchPageProps) {
   const { tags } = useTags()
   const [adding, setAdding] = useState(false)
   const [dragged, setDragged] = useState<string | null>(null)
@@ -227,6 +230,24 @@ export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, o
     )
   }
 
+  const faceTitle = targetTask ? targetTask.title : 'Open stopwatch'
+  const faceSubtitle = targetTask ? targetList?.name ?? 'Calendar only' : 'Not tied to a task'
+  if (fullScreen) {
+    return (
+      <StopwatchFullScreen
+        elapsed={elapsed}
+        running={running}
+        color={color}
+        title={faceTitle}
+        subtitle={faceSubtitle}
+        subtitleColor={targetList?.color}
+        onBreak={onBreak}
+        onToggle={() => (running ? onPause(target) : onStart(target))}
+        onExit={onExitFullScreen}
+      />
+    )
+  }
+
   const changeTask = (
     <select
       value={target ?? OPEN_VALUE}
@@ -246,8 +267,8 @@ export function StopwatchPage({ tasks, lists, open, target, onTarget, onStart, o
             elapsed={elapsed}
             running={running}
             color={color}
-            title={targetTask ? targetTask.title : 'Open stopwatch'}
-            subtitle={targetTask ? targetList?.name ?? 'Calendar only' : 'Not tied to a task'}
+            title={faceTitle}
+            subtitle={faceSubtitle}
             subtitleColor={targetList?.color}
             titleControl={changeTask}
             onBreak={onBreak}

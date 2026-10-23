@@ -159,12 +159,6 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .sidebar-total svg { width: 17px; height: 17px; flex: 0 0 auto; stroke-width: 2; color: var(--text-2); }
 .sidebar-total > span:not(.nav-count) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-total .nav-count { color: var(--text); font-weight: 500; }
-.sidebar-update { --progress: 0%; display: flex; align-items: center; gap: 9px; flex: 0 0 auto; width: 100%; height: 30px; margin-top: 4px; padding: 0 8px; border-radius: 6px; color: var(--accent); background: var(--accent-soft); text-align: left; font-size: 13.5px; font-weight: 500; transition: background 120ms ease; }
-.sidebar-update:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 20%, transparent); }
-.sidebar-update.is-busy { cursor: default; background: linear-gradient(to right, color-mix(in srgb, var(--accent) 24%, transparent) var(--progress), var(--accent-soft) var(--progress)); }
-.sidebar-update svg { width: 17px; height: 17px; flex: 0 0 auto; stroke-width: 2; }
-.sidebar-update > span:not(.nav-count) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-update .nav-count { color: var(--accent); }
 .list-nav { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; gap: 1px; overflow-y: auto; overflow-x: hidden; margin: 0 -10px; padding: 0 10px; }
 .list-nav-row { position: relative; display: flex; align-items: center; border-radius: 6px; color: var(--text); transition: background 120ms ease; }
 .list-nav-row:hover { background: var(--surface-2); }
@@ -226,7 +220,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .sidebar.is-collapsed { padding-left: 8px; padding-right: 8px; }
 .sidebar.is-collapsed .sidebar-top { height: auto; justify-content: center; padding: 48px 0 6px; }
 .sidebar.is-collapsed .sidebar-search { display: none; }
-.sidebar.is-collapsed .sidebar-link, .sidebar.is-collapsed .list-nav-main, .sidebar.is-collapsed .sidebar-total, .sidebar.is-collapsed .sidebar-update { justify-content: center; padding: 0; height: 34px; }
+.sidebar.is-collapsed .sidebar-link, .sidebar.is-collapsed .list-nav-main, .sidebar.is-collapsed .sidebar-total { justify-content: center; padding: 0; height: 34px; }
 .sidebar.is-collapsed .list-ring { width: 18px; height: 18px; }
 .sidebar.is-collapsed .list-more { display: none; }
 .sidebar.is-collapsed .sidebar-footer { flex-direction: column; align-items: center; }
@@ -253,6 +247,36 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .select-control:hover { color: var(--text); background: var(--surface-2); }
 .select-control select { position: absolute; inset: 0; width: 100%; opacity: 0; }
 .select-control svg:last-child { width: 13px; height: 13px; }
+.topbar-button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px; border-radius: 6px; color: var(--text-2); font-size: 12.5px; font-weight: 500; white-space: nowrap; transition: background 120ms ease, color 120ms ease; }
+.topbar-button:hover { color: var(--text); background: var(--surface-2); }
+
+/* New update: top right in the title bar strip, on every page, whenever a newer release is out. The
+   one filled control in the chrome, and always the app blue (it is about Knot, not the list on
+   screen). While the update downloads the button fills left to right. */
+.update-notice { position: absolute; z-index: 6; top: 10px; right: 16px; --accent: var(--blue); --accent-deep: var(--blue-deep); -webkit-app-region: no-drag; }
+.update-pill { --progress: 0%; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px 0 9px; border-radius: 6px; color: #fff; background: var(--blue); box-shadow: var(--shadow-sm); font-size: 13px; font-weight: 600; white-space: nowrap; animation: update-pill-in 360ms var(--ease) both; transition: background 120ms ease, transform 120ms ease; }
+.update-pill:hover { background: var(--blue-deep); }
+:root[data-theme='dark'] .update-pill:hover { background: color-mix(in srgb, var(--blue) 86%, #000); }
+.update-pill:active { transform: scale(0.98); }
+.update-pill.is-busy, .update-pill.is-busy:hover { background: linear-gradient(to right, var(--blue) var(--progress), color-mix(in srgb, var(--blue) 50%, var(--bg)) var(--progress)); }
+.update-pill span { font-variant-numeric: tabular-nums; }
+@keyframes update-pill-in { from { opacity: 0; transform: translateY(-6px); } }
+.update-card { position: absolute; top: calc(100% + 8px); right: 0; width: 332px; padding: 14px 14px 12px; border-radius: var(--r-pop); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); animation: modalIn 140ms var(--ease); transform-origin: top right; }
+.update-card-head { display: flex; flex-direction: column; gap: 2px; }
+.update-card-head h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 20px; }
+.update-card-head span { color: var(--text-2); font-size: 12px; font-weight: 500; }
+.update-notes { max-height: 260px; overflow-y: auto; margin: 12px -14px 0; padding: 10px 14px 2px; border-top: 1px solid var(--border); font-size: 13px; line-height: 18px; overscroll-behavior: contain; }
+.update-notes p { margin: 0 0 8px; }
+.update-notes p.is-heading { font-weight: 600; }
+.update-notes ul { margin: 0 0 8px; padding-left: 17px; }
+.update-notes li { margin-bottom: 5px; }
+.update-notes li::marker { color: var(--text-3); }
+.update-notes strong { font-weight: 600; }
+.update-card-note { margin: 10px -14px 0; padding: 10px 14px 0; border-top: 1px solid var(--border); color: var(--text-2); font-size: 12px; line-height: 16px; }
+.update-card-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.update-card-actions button { min-width: 0; }
+.update-card-progress { display: grid; gap: 7px; margin-top: 12px; padding-bottom: 2px; color: var(--text-2); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.update-card-progress i { --progress: 0%; display: block; height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--blue) var(--progress), var(--surface-3) var(--progress)); transition: background 200ms linear; }
 
 /* ---------- Board (All tasks) ---------- */
 
@@ -800,6 +824,22 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
 .sw-select > span { display: inline-flex; align-items: center; gap: 5px; }
 .sw-select select { position: absolute; inset: 0; width: 100%; opacity: 0; }
 
+/* Full screen: the face alone on the page ground, as large as the screen allows, its readout scaled
+   with it. The bar sits in the margin under it; while the stopwatch runs and the pointer rests it
+   fades out with the cursor. */
+.sw-full { position: fixed; z-index: 45; inset: 0; display: grid; place-items: center; background: var(--bg); -webkit-app-region: no-drag; animation: fadeIn 200ms ease; }
+.sw-full .sw-ink { --sw-face-size: min(calc(100vh - 156px), 90vw); }
+.sw-full .sw-ink-digits { font-size: 16cqi; }
+.sw-full .sw-ink-state { height: auto; gap: max(6px, 0.9cqi); margin-bottom: 2.4cqi; font-size: max(12px, 2cqi); }
+.sw-full .sw-ink-state i { width: max(6px, 0.95cqi); height: max(6px, 0.95cqi); }
+.sw-full .sw-ink-task { max-width: 62cqi; margin-top: 2.6cqi; padding: 0; font-size: max(14px, 2.7cqi); line-height: 1.3; }
+.sw-full .sw-ink-list { max-width: 62cqi; margin-top: 0.5cqi; gap: max(6px, 0.9cqi); font-size: max(12px, 1.9cqi); line-height: 1.3; }
+.sw-full .sw-ink-list i { width: max(7px, 1.05cqi); height: max(7px, 1.05cqi); }
+.sw-full-bar { position: absolute; left: 0; right: 0; bottom: 24px; transition: opacity 320ms ease; }
+.sw-full-bar kbd { margin: 0 -4px 0 4px; color: var(--text-3); background: var(--surface-2); }
+.sw-full.is-quiet { cursor: none; }
+.sw-full.is-quiet .sw-full-bar { opacity: 0; pointer-events: none; transition-duration: 600ms; }
+
 /* Section heads */
 .sw-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .sw-section-head h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 20px; }
@@ -904,7 +944,7 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
 .app-shell.is-sanctuary .hearth-badge.is-poked { animation-name: hearth-badge-bounce, hearth-badge-ring-amber; }
 @keyframes hearth-badge-ring-amber { 0% { outline-offset: 0; outline-color: rgba(255, 196, 107, .8); } 100% { outline-offset: 8px; outline-color: transparent; } }
 .sidebar.is-collapsed .hearth-badge { display: none; }
-@media (prefers-reduced-motion: reduce) { .update-icon.is-busy svg { animation: none; opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .update-icon.is-busy svg { animation: none; opacity: 0.5; } .update-pill, .sw-full { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .hearth-badge, .hearth-badge img, .app-shell .hearth-badge.is-poked { transition: none; animation: none; } }
 
 /* While another app is in front, the loops that run on their own hold still (src/activity.ts). Last in

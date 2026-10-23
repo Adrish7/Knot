@@ -148,9 +148,6 @@
 .app-shell.is-sanctuary .hearth-badge { box-shadow: inset 0 0 0 1px var(--chrome-badge-ring), 0 0 12px rgba(255, 186, 110, 0.28); }
 .app-shell.is-sanctuary .hearth-badge:hover { box-shadow: inset 0 0 0 1px rgba(255, 196, 107, 0.75), 0 0 14px rgba(255, 186, 110, 0.4); }
 
-/* Update Knot: amber on amber over walnut; the download fill stays the accent gradient. */
-.app-shell.is-sanctuary .sidebar-update { box-shadow: inset 0 0 0 1px rgba(255, 196, 107, 0.16); }
-
 /* Settings popover: a walnut panel at night, parchment by day. All inner rows follow the tokens. */
 .app-shell.is-sanctuary .settings-popover {
   box-shadow: 0 0 0 1px rgba(20, 10, 4, 0.6), inset 0 1px 0 rgba(255, 220, 170, 0.14), var(--shadow-md);
@@ -238,7 +235,6 @@
 :root[data-theme='light'] .app-shell.is-sanctuary .sidebar-divider { background: rgba(60, 38, 16, 0.22); box-shadow: 0 1px 0 rgba(255, 250, 235, 0.45); }
 :root[data-theme='light'] .app-shell.is-sanctuary .hearth-badge { box-shadow: inset 0 0 0 1px var(--chrome-badge-ring), 0 0 10px rgba(255, 220, 150, 0.6); }
 :root[data-theme='light'] .app-shell.is-sanctuary .hearth-badge:hover { box-shadow: inset 0 0 0 1px rgba(176, 106, 24, 0.8), 0 0 12px rgba(255, 220, 150, 0.7); }
-:root[data-theme='light'] .app-shell.is-sanctuary .sidebar-update { box-shadow: inset 0 0 0 1px rgba(176, 106, 24, 0.18); }
 :root[data-theme='light'] .app-shell.is-sanctuary .settings-popover {
   box-shadow: 0 0 0 1px #b89a68, inset 0 0 0 1px rgba(255, 250, 235, 0.6), var(--shadow-md);
   border-color: transparent;

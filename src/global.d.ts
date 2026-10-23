@@ -5,6 +5,7 @@ export interface AvailableUpdate {
   size: number
   downloadUrl: string
   releaseUrl: string
+  notes?: string // the release's notes, as written on GitHub (short Markdown)
 }
 
 export interface UpdateProgress {
