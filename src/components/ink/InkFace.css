@@ -1,6 +1,6 @@
 /* The Ink. A round basin of water: the canvas is the water, a bevelled rim frames it, the
    readout rests on the calm centre. Light: ink in water on white porcelain. Dark: luminous dye
-   in black water. Only the rim and the marks are CSS; the water itself is WebGL. */
+   in black water. Only the rim and the marks are CSS; the water itself is a canvas of glyphs. */
 
 .sw-ink {
   --sw-face-size: clamp(300px, 64cqi, 460px);
@@ -30,7 +30,7 @@
 /* --- the water --------------------------------------------------------------------------- */
 .sw-ink-basin { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; background: var(--ink-ground); }
 .sw-ink-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-/* When WebGL is unavailable or lost: a still basin with a faint ring of the task colour. */
+/* When the canvas can't draw: a still basin with a faint ring of the task colour. */
 .sw-ink-still { position: absolute; inset: 0; border-radius: 50%; opacity: 0; transition: opacity 240ms var(--ease); background:
   radial-gradient(closest-side, transparent 82%, color-mix(in srgb, var(--face-color) 18%, transparent) 90%, transparent 97%),
   radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.35), transparent 60%); }

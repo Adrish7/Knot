@@ -7,10 +7,11 @@ import './InkFace.css'
 // The Ink. A shallow round basin of water seen from above, the readout resting in its calm
 // centre. Once a second a drop of the task's colour lands on the rim at the second's place and
 // blooms; a slow spiral in the water draws each bloom backwards and inwards as it ages, so the
-// last half minute reads as a comet curling round the rim. The pointer stirs the water. At the
-// minute a vortex folds the trail into the body of the water; at the hour the basin rings.
+// last half minute reads as a comet curling round the rim. The pointer trails a little ink.
 //
-// Everything continuous is a WebGL2 fluid simulation (controller.ts drives it, fluid.ts is the solver).
+// The water is drawn in type: the trail as it stands at this moment, as a grid of glyphs
+// (controller.ts works out where each drop has drifted to, ascii.ts draws it; basin.ts is the
+// earlier WebGL2 drawing of the same blobs, one import away). Nothing is simulated.
 // React renders only when the shown second changes, for the readout, the minute arc and the
 // hour dots. The readout and its drums are the current face's, re-prefixed.
 
