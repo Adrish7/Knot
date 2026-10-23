@@ -118,8 +118,9 @@ function createWindow() {
   const window = new BrowserWindow({
     width: 1480,
     height: 920,
-    minWidth: 1040,
-    minHeight: 680,
+    // Small enough to keep beside other work: the sidebar folds to a rail and the pages tighten.
+    minWidth: 320,
+    minHeight: 320,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#232326' : '#ffffff',
     title: 'Knot',
     titleBarStyle: 'hiddenInset',

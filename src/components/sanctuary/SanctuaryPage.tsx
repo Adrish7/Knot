@@ -736,6 +736,11 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
   // The plank hangs from a nail at plate (226, 326). It is fixed-size; `ts` scales it about the nail.
   const signLeft = fitX(px(226) - 80 * ts, 160 * ts) + 80 * ts // the plank's centre
   const signTop = py(326) + 20
+  // In a narrow window the plank is pulled in from the left edge onto the growth mark, and there is
+  // no room for both side by side; the mark gives way (Hearth's bubble still says the hours).
+  const markLeft = fitX(px(GROWTH.x - 16), 176 * ts)
+  const markTop = py(GROWTH.notches[2] - 44)
+  const markHidden = markLeft < signLeft + 88 * ts && Math.abs(markTop - signTop) < 34 * ts
 
   const at = (x: number, y: number): CSSProperties => ({ left: px(x), top: py(y) })
   const card = KEEPSAKES.find((item) => item.id === cardId) ?? KEEPSAKES[0]
@@ -867,9 +872,11 @@ export function SanctuaryPage({ stats, state, cinderAway, onBuy, poke }: Sanctua
           {jarDelta && <span key={jarDelta.key} className="sanc-jdelta" style={at(JAR.base[0], JAR.base[1] - JAR.w * JAR.ratio * 0.95)}>{jarDelta.text}</span>}
 
           {/* Growth: one carved mark at the head of the groove */}
-          <div className="sanc-carve is-mark" style={at(GROWTH.x - 16, GROWTH.notches[2] - 44)}>
-            {stage.name}<em>{next ? `${Math.max(1, Math.ceil(toNext))}\u2009h to ${next.name}` : `${Math.round(stats.sap)}\u2009h`}</em>
-          </div>
+          {!markHidden && (
+            <div className="sanc-carve is-mark" style={{ left: markLeft, top: markTop }}>
+              {stage.name}<em>{next ? `${Math.max(1, Math.ceil(toNext))}\u2009h to ${next.name}` : `${Math.round(stats.sap)}\u2009h`}</em>
+            </div>
+          )}
           <div className="sanc-tour-box" data-tour="lanterns" style={{ left: px(140), top: py(100), width: 416 * S, height: 370 * S }} />
           {/* The shelf and the groove, widened to take in the fixed-size jar label and growth mark */}
           <div className="sanc-tour-box" data-tour="growth" style={{ left: Math.min(px(350), px(JAR.label[0]) - 64 * ts), top: py(380), width: Math.max(px(650), px(GROWTH.x - 16) + 170 * ts) - Math.min(px(350), px(JAR.label[0]) - 64 * ts), height: 280 * S }} />

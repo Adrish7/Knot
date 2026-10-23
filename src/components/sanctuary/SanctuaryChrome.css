@@ -70,14 +70,14 @@
 /* Fireflies: three tiny points resting in the sidebar's quiet space. They are always in the DOM as
    pseudo-elements, invisible until --chrome-fireflies rises. They used to drift and twinkle; held
    still (as reduced motion always had them) the window doesn't recomposite the sidebar every frame. */
-.sidebar::after, .list-nav + .sidebar-divider::after, .secondary-nav + .sidebar-divider::after {
+.sidebar::after, .sidebar-scroll + .sidebar-divider::after, .secondary-nav + .sidebar-divider::after {
   content: ''; position: absolute; z-index: -1; width: 3px; height: 3px; border-radius: 50%; pointer-events: none;
   background: #fff1c8; box-shadow: 0 0 6px 2px rgba(255, 214, 130, 0.7), 0 0 14px 4px rgba(255, 186, 110, 0.25);
   opacity: calc(var(--chrome-fireflies) * 0.6);
 }
 .sidebar-divider { position: relative; }
 .sidebar::after { left: 34px; bottom: 112px; }
-.list-nav + .sidebar-divider::after { right: 26px; top: 46px; }
+.sidebar-scroll + .sidebar-divider::after { right: 26px; top: 46px; }
 .secondary-nav + .sidebar-divider::after { left: 58px; top: 70px; }
 
 /* ---------- 3. Scoped: the Sanctuary skin (night values; day overrides below) ---------- */

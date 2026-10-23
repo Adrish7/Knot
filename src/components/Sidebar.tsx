@@ -107,68 +107,71 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
         {query ? <button type="button" className="search-clear" onClick={() => onQuery('')} aria-label="Clear search"><X size={10} strokeWidth={3} /></button> : <kbd>⌘K</kbd>}
       </label>
 
-      <nav className="primary-nav" aria-label="Task views">
-        <SidebarLink collapsed={collapsed} active={selectedView === 'all'} color="var(--c-all)" icon={<Inbox />} label="All tasks" count={openTasks.length} onClick={() => onSelect('all')} />
-        <SidebarLink collapsed={collapsed} active={selectedView === 'today'} color="var(--c-today)" icon={<Sun />} label="Today" count={todayCount} onClick={() => onSelect('today')} />
-        <SidebarLink collapsed={collapsed} active={selectedView === 'calendar'} color="var(--c-calendar)" icon={<CalendarDays />} label="Calendar" count={0} onClick={() => onSelect('calendar')} />
-        <SidebarLink collapsed={collapsed} active={selectedView === 'starred'} color="var(--c-starred)" icon={<Star fill="currentColor" />} label="Starred" count={starredCount} onClick={() => onSelect('starred')} />
-        <SidebarLink collapsed={collapsed} active={selectedView === 'stopwatch'} color="var(--c-timer)" icon={<Timer />} label="Stopwatch" count={runningTrack ? <span className="nav-live"><span className="run-dot" aria-hidden="true" />{formatClock(totalSeconds(runningTrack, now))}</span> : 0} onClick={() => onSelect('stopwatch')} />
-        {sanctuaryOn && <SidebarLink collapsed={collapsed} active={selectedView === 'sanctuary'} color="var(--c-sanctuary)" icon={<MoonStar />} label="Sanctuary" count={0} onClick={() => onSelect('sanctuary')} data-tour="sanctuary-nav" />}
-      </nav>
-      <nav className="secondary-nav" aria-label="Archive">
-        <SidebarLink collapsed={collapsed} active={selectedView === 'completed'} color="var(--c-done)" icon={<CheckCircle2 />} label="Completed" count={completedCount} onClick={() => onSelect('completed')} />
-        <SidebarLink collapsed={collapsed} active={selectedView === 'trash'} color="var(--c-trash)" icon={<Trash2 />} label="Recently deleted" count={trashCount} onClick={() => onSelect('trash')} />
-      </nav>
+      {/* Views and lists scroll together, so the footer stays in reach however short the window. */}
+      <div className="sidebar-scroll">
+        <nav className="primary-nav" aria-label="Task views">
+          <SidebarLink collapsed={collapsed} active={selectedView === 'all'} color="var(--c-all)" icon={<Inbox />} label="All tasks" count={openTasks.length} onClick={() => onSelect('all')} />
+          <SidebarLink collapsed={collapsed} active={selectedView === 'today'} color="var(--c-today)" icon={<Sun />} label="Today" count={todayCount} onClick={() => onSelect('today')} />
+          <SidebarLink collapsed={collapsed} active={selectedView === 'calendar'} color="var(--c-calendar)" icon={<CalendarDays />} label="Calendar" count={0} onClick={() => onSelect('calendar')} />
+          <SidebarLink collapsed={collapsed} active={selectedView === 'starred'} color="var(--c-starred)" icon={<Star fill="currentColor" />} label="Starred" count={starredCount} onClick={() => onSelect('starred')} />
+          <SidebarLink collapsed={collapsed} active={selectedView === 'stopwatch'} color="var(--c-timer)" icon={<Timer />} label="Stopwatch" count={runningTrack ? <span className="nav-live"><span className="run-dot" aria-hidden="true" />{formatClock(totalSeconds(runningTrack, now))}</span> : 0} onClick={() => onSelect('stopwatch')} />
+          {sanctuaryOn && <SidebarLink collapsed={collapsed} active={selectedView === 'sanctuary'} color="var(--c-sanctuary)" icon={<MoonStar />} label="Sanctuary" count={0} onClick={() => onSelect('sanctuary')} data-tour="sanctuary-nav" />}
+        </nav>
+        <nav className="secondary-nav" aria-label="Archive">
+          <SidebarLink collapsed={collapsed} active={selectedView === 'completed'} color="var(--c-done)" icon={<CheckCircle2 />} label="Completed" count={completedCount} onClick={() => onSelect('completed')} />
+          <SidebarLink collapsed={collapsed} active={selectedView === 'trash'} color="var(--c-trash)" icon={<Trash2 />} label="Recently deleted" count={trashCount} onClick={() => onSelect('trash')} />
+        </nav>
 
-      <div className="sidebar-divider" />
+        <div className="sidebar-divider" />
 
-      <div className="list-nav" aria-label="Lists">
-        {lists.map((list) => {
-          const open = tasks.filter((task) => task.listId === list.id && !task.completed).length
-          const done = tasks.filter((task) => task.listId === list.id && task.completed).length
-          const editing = editingListId === list.id
-          const finishEdit = () => {
-            const name = draftListName.trim()
-            setEditingListId(null)
-            if (name && name !== list.name) onRenameList(list.id, name)
-          }
-          return (
-            <div className={`list-nav-row ${selectedView === `list:${list.id}` ? 'active' : ''}`} key={list.id}>
-              <div className="list-nav-main" role="button" tabIndex={editing ? -1 : 0} title={collapsed ? list.name : undefined} onClick={() => !editing && onSelect(`list:${list.id}`)} onKeyDown={(event) => {
-                if (!editing && (event.key === 'Enter' || event.key === ' ')) onSelect(`list:${list.id}`)
-              }}>
-                <ListRing color={list.color} progress={listProgress(open, done)} />
-                {!collapsed && (editing ? (
-                  <input
-                    className="sidebar-list-name-input"
-                    value={draftListName}
-                    maxLength={120}
-                    autoFocus
-                    aria-label="List name"
-                    onFocus={(event) => event.currentTarget.select()}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) => setDraftListName(event.target.value)}
-                    onBlur={finishEdit}
-                    onKeyDown={(event) => {
+        <div className="list-nav" aria-label="Lists">
+          {lists.map((list) => {
+            const open = tasks.filter((task) => task.listId === list.id && !task.completed).length
+            const done = tasks.filter((task) => task.listId === list.id && task.completed).length
+            const editing = editingListId === list.id
+            const finishEdit = () => {
+              const name = draftListName.trim()
+              setEditingListId(null)
+              if (name && name !== list.name) onRenameList(list.id, name)
+            }
+            return (
+              <div className={`list-nav-row ${selectedView === `list:${list.id}` ? 'active' : ''}`} key={list.id}>
+                <div className="list-nav-main" role="button" tabIndex={editing ? -1 : 0} title={collapsed ? list.name : undefined} onClick={() => !editing && onSelect(`list:${list.id}`)} onKeyDown={(event) => {
+                  if (!editing && (event.key === 'Enter' || event.key === ' ')) onSelect(`list:${list.id}`)
+                }}>
+                  <ListRing color={list.color} progress={listProgress(open, done)} />
+                  {!collapsed && (editing ? (
+                    <input
+                      className="sidebar-list-name-input"
+                      value={draftListName}
+                      maxLength={120}
+                      autoFocus
+                      aria-label="List name"
+                      onFocus={(event) => event.currentTarget.select()}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) => setDraftListName(event.target.value)}
+                      onBlur={finishEdit}
+                      onKeyDown={(event) => {
+                        event.stopPropagation()
+                        if (event.key === 'Enter') finishEdit()
+                        if (event.key === 'Escape') setEditingListId(null)
+                      }}
+                    />
+                  ) : (
+                    <span className="list-name" onDoubleClick={(event) => {
+                      event.preventDefault()
                       event.stopPropagation()
-                      if (event.key === 'Enter') finishEdit()
-                      if (event.key === 'Escape') setEditingListId(null)
-                    }}
-                  />
-                ) : (
-                  <span className="list-name" onDoubleClick={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    setDraftListName(list.name)
-                    setEditingListId(list.id)
-                  }} title="Double-click to rename">{list.name}</span>
-                ))}
-                {!collapsed && <span className="nav-count">{open || ''}</span>}
+                      setDraftListName(list.name)
+                      setEditingListId(list.id)
+                    }} title="Double-click to rename">{list.name}</span>
+                  ))}
+                  {!collapsed && <span className="nav-count">{open || ''}</span>}
+                </div>
+                <button className="list-more" aria-label={`More options for ${list.name}`} aria-haspopup="menu" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onListMenu(list, event.currentTarget) }}><Ellipsis size={15} /></button>
               </div>
-              <button className="list-more" aria-label={`More options for ${list.name}`} aria-haspopup="menu" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onListMenu(list, event.currentTarget) }}><Ellipsis size={15} /></button>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
 
       <div className="sidebar-divider" />
