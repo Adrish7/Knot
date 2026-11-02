@@ -1,3 +1,5 @@
+![Tasks being dragged around Knot's week calendar](docs/calendar-drag.gif)
+
 # Knot
 
 Knot is a calm, native-feeling task manager for macOS. Lists, a Today view, a calendar, starred tasks, reminders, recurring tasks, and a stopwatch for tracking your time, all stored locally on your Mac.
