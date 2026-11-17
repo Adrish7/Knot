@@ -19,6 +19,7 @@ interface BoardProps {
   onQuickAddList: (listId: string | null) => void
   onAddTask: (listId: string, title: string, openDetails?: boolean) => void
   onOpenTask: (taskId: string) => void
+  onOpenTaskPage: (taskId: string) => void
   onCompleteTask: (taskId: string, completed: boolean) => void
   onToggleSubtask: (taskId: string, subtaskId: string) => void
   onStarTask: (taskId: string) => void
@@ -197,7 +198,7 @@ export function Board(props: BoardProps) {
                   </header>
                   <QuickAdd expanded={props.quickAddListId === list.id} onExpand={() => props.onQuickAddList(list.id)} onCancel={() => props.onQuickAddList(null)} onAdd={(title, openDetails) => props.onAddTask(list.id, title, openDetails)} />
                   <div className="task-stack">
-                    {open.map((task) => <TaskItem key={task.id} task={task} onOpen={props.onOpenTask} onComplete={props.onCompleteTask} onToggleSubtask={props.onToggleSubtask} onStar={props.onStarTask} onDelete={props.onDeleteTask} onSetDue={props.onSetDueTask} onSetTimeSpent={props.onSetTimeSpentTask} onStopwatch={props.onStopwatchTask} onRename={props.onRenameTask} onDragStart={sortMode === 'manual' ? startDrag : undefined} onDragEnd={finishDrag} dropEdge={edgeFor(list.id, open, task)} />)}
+                    {open.map((task) => <TaskItem key={task.id} task={task} onOpen={props.onOpenTask} onOpenPage={props.onOpenTaskPage} onComplete={props.onCompleteTask} onToggleSubtask={props.onToggleSubtask} onStar={props.onStarTask} onDelete={props.onDeleteTask} onSetDue={props.onSetDueTask} onSetTimeSpent={props.onSetTimeSpentTask} onStopwatch={props.onStopwatchTask} onRename={props.onRenameTask} onDragStart={sortMode === 'manual' ? startDrag : undefined} onDragEnd={finishDrag} dropEdge={edgeFor(list.id, open, task)} />)}
                     {showEmptyDropLine(list.id, open) && <div className="drop-line" />}
                     {open.length === 0 && <div className="mini-empty"><CheckCircle2 size={19} /><span>All clear</span></div>}
                   </div>
@@ -237,6 +238,7 @@ export function Board(props: BoardProps) {
               task={task}
               listName={listNameFor(task)}
               onOpen={props.onOpenTask}
+              onOpenPage={props.onOpenTaskPage}
               onComplete={props.onCompleteTask}
               onToggleSubtask={props.onToggleSubtask}
               onStar={props.onStarTask}
@@ -262,7 +264,7 @@ export function Board(props: BoardProps) {
         {complete.length > 0 && (
           <div className="focus-completed">
             <div className="focus-section-label"><span>Completed</span><span>{complete.length}</span></div>
-            {complete.map((task) => <TaskItem compact key={task.id} task={task} listName={listNameFor(task)} onOpen={props.onOpenTask} onComplete={props.onCompleteTask} onToggleSubtask={props.onToggleSubtask} onStar={props.onStarTask} onDelete={props.onDeleteTask} onSetTimeSpent={props.onSetTimeSpentTask} onStopwatch={props.onStopwatchTask} onRename={props.onRenameTask} />)}
+            {complete.map((task) => <TaskItem compact key={task.id} task={task} listName={listNameFor(task)} onOpen={props.onOpenTask} onOpenPage={props.onOpenTaskPage} onComplete={props.onCompleteTask} onToggleSubtask={props.onToggleSubtask} onStar={props.onStarTask} onDelete={props.onDeleteTask} onSetTimeSpent={props.onSetTimeSpentTask} onStopwatch={props.onStopwatchTask} onRename={props.onRenameTask} />)}
           </div>
         )}
       </section>

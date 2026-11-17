@@ -22,11 +22,22 @@ export interface Tag {
   sortOrder: number
 }
 
+// A task's page, written line by line like a note. A line is either text or a subtask; the subtasks
+// are the task's checklist and show under it in every view, while the text stays on the page.
+export interface TextLine {
+  id: string
+  kind: 'text'
+  text: string
+}
+
 export interface Subtask {
   id: string
-  title: string
+  kind: 'subtask'
+  text: string
   completed: boolean
 }
+
+export type PageLine = TextLine | Subtask
 
 export interface TimeSession {
   start: string // ISO
@@ -42,7 +53,7 @@ export interface Task {
   id: string
   listId: string | null // null means the task exists only on its calendar day(s)
   title: string
-  notes: string
+  page: PageLine[] // notes and subtasks, in the order they are written
   dueAt: string | null
   focusDates: string[] // local day keys, 'YYYY-MM-DD'
   focusStatus: Record<string, FocusStatus> // day key -> outcome for that focus day
@@ -56,7 +67,6 @@ export interface Task {
   completedAt: string | null
   createdAt: string
   sortOrder: number
-  subtasks: Subtask[]
   tagIds: string[]
   time: TimeTrack // time spent on the task, whatever its state
 }

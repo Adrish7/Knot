@@ -7,6 +7,7 @@ import { Header } from './components/Header'
 import { ConfirmModal, CreateListModal, RenameListModal } from './components/Modal'
 import { Sidebar } from './components/Sidebar'
 import { StopwatchPage } from './components/StopwatchPage'
+import { TaskPage } from './components/TaskPage'
 import { TaskPanel } from './components/TaskPanel'
 import { Tour, WHATS_NEW } from './components/Tour'
 import { ListRing, listProgress } from './components/ListRing'
@@ -17,6 +18,7 @@ import { createSeedData, createTask, nextOccurrence, normalizeData, palette, sor
 import { dateKey, dayKeyOf, isForToday, parseDateKey, todayDate, todayKey } from './format'
 import { useActivity } from './activity'
 import { useNow } from './useNow'
+import { copyPage, pageText, toggleSubtaskIn } from './page'
 import { useUpdate } from './useUpdate'
 import { KEEPSAKES, SANCTUARY_TOUR, raisedMarks, sanctuaryStats } from './sanctuary'
 import { dayBalance, sortTags } from './tags'
@@ -131,6 +133,8 @@ function App() {
   const unreadData = useRef<KnotData | null>(null)
   const [selectedView, setSelectedView] = useState<ViewId>('all')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  // A task's page, open in place of the view. Opened from the task's panel, Back returns to the panel.
+  const [pageView, setPageView] = useState<{ taskId: string; fromPanel: boolean } | null>(null)
   // Which stopwatch the Stopwatch page shows: a task id, or null for the open stopwatch.
   const [stopwatchTarget, setStopwatchTarget] = useState<string | null>(null)
   const [quickAddListId, setQuickAddListId] = useState<string | null>(null)
@@ -285,6 +289,7 @@ function App() {
   const enterStopwatchFull = () => {
     setStopwatchFull(true)
     setSelectedTaskId(null)
+    setPageView(null)
     setUpdateOpen(false)
     if (!document.fullscreenElement) document.documentElement.requestFullscreen?.()?.catch(() => {})
   }
@@ -307,7 +312,7 @@ function App() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (stopwatchFull) return // the full-screen stopwatch takes its own keys
       if (event.key.toLowerCase() === 'f' && !event.metaKey && !event.ctrlKey && !event.altKey && selectedView === 'stopwatch' && !query.trim()
-        && !isTyping(event.target) && !createListOpen && !renameList && !confirmAction && !tour) {
+        && !isTyping(event.target) && !createListOpen && !renameList && !confirmAction && !tour && !pageView) {
         event.preventDefault()
         enterStopwatchFull()
         return
@@ -319,6 +324,7 @@ function App() {
       if (event.metaKey && event.key.toLowerCase() === 'n') {
         event.preventDefault()
         if (selectedView === 'completed' || selectedView === 'trash' || selectedView === 'calendar' || selectedView === 'stopwatch') return
+        setPageView(null)
         const firstListId = [...data.lists].sort((a, b) => a.sortOrder - b.sortOrder)[0]?.id
         const selectedId = selectedView.startsWith('list:') ? selectedView.slice(5) : firstListId
         if (selectedId) setQuickAddListId(selectedId)
@@ -328,22 +334,37 @@ function App() {
         if (createListOpen || renameList || confirmAction) return
         if (listMenu) { setListMenu(null); return }
         if (quickAddListId) { setQuickAddListId(null); return }
-        setSelectedTaskId(null)
+        if (selectedTaskId) { setSelectedTaskId(null); return }
+        if (pageView) closeTaskPage()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [confirmAction, createListOpen, data.lists, listMenu, query, quickAddListId, renameList, selectedView, stopwatchFull, tour])
+  }, [confirmAction, createListOpen, data.lists, listMenu, pageView, query, quickAddListId, renameList, selectedTaskId, selectedView, stopwatchFull, tour])
 
   const sortedLists = useMemo(() => [...data.lists].sort((a, b) => a.sortOrder - b.sortOrder), [data.lists])
   const sortedTags = useMemo(() => sortTags(data.tags), [data.tags])
   const selectedTask = data.tasks.find((task) => task.id === selectedTaskId) ?? null
+  const pageTask = pageView ? data.tasks.find((task) => task.id === pageView.taskId) ?? null : null
+  // A page whose task has gone (deleted, cleared) closes, so restoring the task doesn't reopen it.
+  useEffect(() => { if (pageView && !pageTask) setPageView(null) }, [pageView, pageTask])
+  // Going to another view, or searching, leaves the page.
+  useEffect(() => { setPageView(null) }, [selectedView])
+  const openTaskPage = (taskId: string, fromPanel: boolean) => {
+    setPageView({ taskId, fromPanel })
+    setSelectedTaskId(null)
+    setQuickAddListId(null)
+  }
+  const closeTaskPage = () => {
+    if (pageView?.fromPanel) setSelectedTaskId(pageView.taskId)
+    setPageView(null)
+  }
 
   const displayedTasks = useMemo(() => {
     const needle = query.trim().toLowerCase()
     let tasks = data.tasks.filter((task) => task.listId !== null)
     const tagNames = (task: Task) => data.tags.filter((tag) => task.tagIds.includes(tag.id)).map((tag) => tag.name).join(' ')
-    if (needle) return tasks.filter((task) => `${task.title} ${task.notes} ${task.subtasks.map((item) => item.title).join(' ')} ${tagNames(task)}`.toLowerCase().includes(needle))
+    if (needle) return tasks.filter((task) => `${task.title} ${pageText(task)} ${tagNames(task)}`.toLowerCase().includes(needle))
     tasks = tasks.filter((task) => !task.completed)
     if (selectedView === 'today') tasks = sortFocusDay(tasks.filter(isForToday), todayKey())
     else if (selectedView === 'starred') tasks = sortStarred(tasks.filter((task) => task.starred))
@@ -535,6 +556,7 @@ function App() {
     setSelectedView('stopwatch')
     setQuery('')
     setSelectedTaskId(null)
+    setPageView(null)
     setQuickAddListId(null)
   }
   // A task made on the Stopwatch page is planned for today in the calendar and becomes what the
@@ -577,7 +599,7 @@ function App() {
       const copy: Task = {
         ...createTask(source.listId, source.title, endSortOrder(next.tasks, source.listId)),
         tagIds: [...source.tagIds],
-        subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })),
+        page: copyPage(source.page, false),
       }
       return placeFocus({ ...next, tasks: [...next.tasks, copy] }, copy.id, day, null, beforeTaskId)
     }, current))
@@ -672,7 +694,7 @@ function App() {
     setData((current) => ({
       ...current,
       tasks: current.tasks.map((task) => task.id === taskId
-        ? { ...task, subtasks: task.subtasks.map((subtask) => subtask.id === subtaskId ? { ...subtask, completed: !subtask.completed } : subtask) }
+        ? { ...task, page: toggleSubtaskIn(task.page, subtaskId) }
         : task),
     }))
   }
@@ -685,11 +707,11 @@ function App() {
       const repeat = nextRepeat(source, !completed && source.completedAt ? new Date(source.completedAt).getTime() : Date.now())
       const isNextCopy = (task: Task) => repeat !== null && task.id !== source.id && !task.completed && task.listId === source.listId && task.title === source.title && task.recurrence === source.recurrence && task.dueAt === repeat.dueAt && (repeat.dueAt !== null || task.focusDates.join() === repeat.focusDates.join())
       if (completed && !source.completed && repeat && !tasks.some(isNextCopy)) {
-        tasks.push({ ...source, ...repeat, id: uid('task'), focusStatus: {}, focusOrder: {}, starredOrder: null, stopwatchOrder: null, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: endSortOrder(tasks, source.listId), subtasks: source.subtasks.map((item) => ({ ...item, id: uid('subtask'), completed: false })), time: emptyTrack() })
+        tasks.push({ ...source, ...repeat, id: uid('task'), focusStatus: {}, focusOrder: {}, starredOrder: null, stopwatchOrder: null, completed: false, completedAt: null, createdAt: new Date().toISOString(), sortOrder: endSortOrder(tasks, source.listId), page: copyPage(source.page, true), time: emptyTrack() })
       }
       // Reopening takes back the copy completing made, as long as nothing has been done with it.
       if (!completed && source.completed && repeat) {
-        const untouched = (task: Task) => isNextCopy(task) && totalSeconds(task.time) === 0 && task.subtasks.every((item) => !item.completed) && task.createdAt >= (source.completedAt ?? '')
+        const untouched = (task: Task) => isNextCopy(task) && totalSeconds(task.time) === 0 && task.page.every((line) => line.kind !== 'subtask' || !line.completed) && task.createdAt >= (source.completedAt ?? '')
         tasks = tasks.filter((task) => !untouched(task))
       }
       return { ...current, tasks }
@@ -897,6 +919,7 @@ function App() {
         setStopwatchTarget(next.tasks.find((task) => isRunning(task.time))?.id ?? null)
         setSelectedView('all')
         setSelectedTaskId(null)
+        setPageView(null)
         showToast('Data imported')
       },
     })
@@ -915,6 +938,7 @@ function App() {
     setSelectedView(`list:${listId}`)
     setQuery('')
     setQuickAddListId(null)
+    setPageView(null)
   }
 
   if (!hydrated) return <div className="splash"><img src="./icon.png" alt="" /><span>Loading Knot</span></div>
@@ -938,8 +962,8 @@ function App() {
           theme={data.preferences.theme}
           query={query}
           searchRef={searchRef}
-          onQuery={(value) => { setQuery(value); if (value.trim() && (selectedView === 'trash' || selectedView === 'completed')) setSelectedView('all') }}
-          onSelect={(view) => { setSelectedView(view); setQuery(''); setQuickAddListId(null) }}
+          onQuery={(value) => { setQuery(value); if (value.trim()) setPageView(null); if (value.trim() && (selectedView === 'trash' || selectedView === 'completed')) setSelectedView('all') }}
+          onSelect={(view) => { setSelectedView(view); setQuery(''); setQuickAddListId(null); setPageView(null) }}
           onCreateList={() => setCreateListOpen(true)}
           onListMenu={openListMenu}
           onRenameList={renameListById}
@@ -953,11 +977,21 @@ function App() {
           buddy={sanctuary ? { state: sanctuary.energyState, stage: sanctuary.growth.stage.id, here: sanctuaryOpen } : null}
           sanctuaryOn={sanctuaryOn}
           onSanctuary={setSanctuaryOn}
-          onBuddy={() => { if (sanctuaryOpen) setHearthPoke((n) => n + 1); else { setSelectedView('sanctuary'); setQuery(''); setQuickAddListId(null) } }}
+          onBuddy={() => { if (sanctuaryOpen) setHearthPoke((n) => n + 1); else { setSelectedView('sanctuary'); setQuery(''); setQuickAddListId(null); setPageView(null) } }}
           onShowWhatsNew={openTour}
         />
         <section className="workspace">
           <UpdateNotice updates={updates} open={updateOpen} onOpen={setUpdateOpen} stopwatchRunning={anyRunning} />
+          {pageTask ? <TaskPage
+            key={pageTask.id}
+            task={pageTask}
+            lists={sortedLists}
+            backLabel={page.title}
+            onBack={closeTaskPage}
+            onDetails={() => setSelectedTaskId(pageTask.id)}
+            onUpdate={(patch) => updateTask(pageTask.id, patch)}
+            onComplete={(completed) => completeTask(pageTask.id, completed)}
+          /> : <>
           <Header
             title={page.title}
             subline={page.subline}
@@ -1026,6 +1060,7 @@ function App() {
                   : selectedView === 'starred' ? { starred: true }
                   : {})}
               onOpenTask={setSelectedTaskId}
+              onOpenTaskPage={(taskId) => openTaskPage(taskId, false)}
               onCompleteTask={completeTask}
               onToggleSubtask={toggleSubtask}
               onStarTask={toggleStar}
@@ -1041,9 +1076,10 @@ function App() {
               onMoveList={moveList}
               onCreateList={() => setCreateListOpen(true)}
             />}
+          </>}
         </section>
 
-        {selectedTask && <><button className="panel-scrim" onClick={() => setSelectedTaskId(null)} aria-label="Close details" /><TaskPanel task={selectedTask} lists={sortedLists} onStopwatch={() => openStopwatchFor(selectedTask.id)} onSetTimeSpent={(seconds) => adjustStopwatch(selectedTask.id, seconds)} onUpdate={(patch) => {
+        {selectedTask && <><button className="panel-scrim" onClick={() => setSelectedTaskId(null)} aria-label="Close details" /><TaskPanel task={selectedTask} lists={sortedLists} onOpenPage={pageTask?.id === selectedTask.id ? undefined : () => openTaskPage(selectedTask.id, true)} onStopwatch={() => openStopwatchFor(selectedTask.id)} onSetTimeSpent={(seconds) => adjustStopwatch(selectedTask.id, seconds)} onUpdate={(patch) => {
           if (patch.listId && patch.listId !== selectedTask.listId) moveTask(selectedTask.id, patch.listId)
           else updateTask(selectedTask.id, patch)
         }} onComplete={(completed) => completeTask(selectedTask.id, completed)} onDelete={() => deleteTask(selectedTask.id)} onClose={() => setSelectedTaskId(null)} /></>}
@@ -1061,7 +1097,7 @@ function App() {
           </div>
         )}
 
-        {tour && <Tour steps={WHATS_NEW} step={tour.step} onStep={(step) => setTour((current) => current && { ...current, step })} onClose={closeTour} onView={(view) => { setSelectedView(view); setQuery('') }} />}
+        {tour && <Tour steps={WHATS_NEW} step={tour.step} onStep={(step) => setTour((current) => current && { ...current, step })} onClose={closeTour} onView={(view) => { setSelectedView(view); setQuery(''); setPageView(null) }} />}
 
         {toast && <div className="toast"><CheckCircle2 size={16} />{toast}</div>}
       </div>

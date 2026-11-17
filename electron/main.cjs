@@ -188,6 +188,13 @@ function createMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+// The first line written on a task's page (older data kept plain notes).
+function firstNote(task) {
+  const line = Array.isArray(task.page) ? task.page.find((item) => item && item.kind === 'text' && typeof item.text === 'string' && item.text.trim()) : null
+  if (line) return line.text.trim()
+  return typeof task.notes === 'string' ? task.notes.trim() : ''
+}
+
 function scheduleNotifications(data) {
   for (const timer of notificationTimers.values()) clearTimeout(timer)
   notificationTimers.clear()
@@ -210,7 +217,7 @@ function scheduleNotifications(data) {
       if (Notification.isSupported()) {
         const notification = new Notification({
           title: task.title,
-          body: task.notes || 'A task in Knot is due soon.',
+          body: firstNote(task) || 'A task in Knot is due soon.',
           icon: path.join(__dirname, '..', 'assets', 'icon.png'),
         })
         notification.on('click', () => revealMainWindow(true))

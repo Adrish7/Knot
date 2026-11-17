@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, CircleArrowDown, Download, Ellipsis, Inbox, Leaf, MoonStar, PanelLeft, Plus, Power, Search, Settings2, Star, Sun, Timer, Trash2, Upload, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, CircleArrowDown, Download, Ellipsis, Inbox, Leaf, MoonStar, PanelLeft, Plus, Power, RefreshCw, Search, Settings2, Star, Sun, Timer, Trash2, Upload, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { dayKeyOf, isForToday, todayKey } from '../format'
 import { dayBalance, isBreakTask } from '../tags'
@@ -229,12 +229,15 @@ export function Sidebar({ collapsed, lists, tasks, stopwatch, selectedView, comp
             </div>
             {updates.supported && <>
               <div className="settings-divider" />
-              <div className="settings-version">
-                <span>{updates.version ? `Knot ${updates.version}` : 'Knot'}</span>
-                {updates.update
-                  ? <button onClick={() => { setSettingsOpen(false); onShowUpdate() }}>Update to {updates.update.version}</button>
-                  : <button onClick={updates.checkNow} disabled={updates.checking}>{updates.checking ? 'Checking…' : 'Check for updates'}</button>}
-              </div>
+              {updates.update
+                ? <button className="settings-row settings-action is-update" onClick={() => { setSettingsOpen(false); onShowUpdate() }}>
+                  <span><CircleArrowDown size={15} />Update to {updates.update.version}</span>
+                  {updates.version && <small className="settings-version">{updates.version}</small>}
+                </button>
+                : <button className="settings-row settings-action" onClick={updates.checkNow} disabled={updates.checking} title={updates.version ? `You have Knot ${updates.version}` : undefined}>
+                  <span><RefreshCw size={15} className={updates.checking ? 'is-spinning' : undefined} />{updates.checking ? 'Checking…' : 'Check for updates'}</span>
+                  {updates.version && <small className="settings-version">{updates.version}</small>}
+                </button>}
             </>}
           </div>
         )}

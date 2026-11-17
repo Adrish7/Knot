@@ -1,6 +1,7 @@
-import { Bell, Calendar, CalendarDays, Check, ChevronDown, ChevronRight, GripVertical, ListTree, Repeat2, Star, Trash2 } from 'lucide-react'
+import { Bell, Calendar, CalendarDays, Check, ChevronDown, ChevronRight, FileText, GripVertical, ListTree, Repeat2, Star, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { completedSubtasks, formatDayKey, formatDue, isOverdue, isToday, todayKey } from '../format'
+import { formatDayKey, formatDue, isOverdue, isToday, todayKey } from '../format'
+import { hasNotes, subtasksOf } from '../page'
 import { DateTimePicker } from './DateTimePicker'
 import { TagChips } from './Tags'
 import { TimeSpentPicker } from './TimeSpentPicker'
@@ -14,6 +15,7 @@ interface TaskItemProps {
   compact?: boolean
   listName?: string
   onOpen: (taskId: string) => void
+  onOpenPage?: (taskId: string) => void
   onComplete: (taskId: string, completed: boolean) => void
   onToggleSubtask: (taskId: string, subtaskId: string) => void
   onStar: (taskId: string) => void
@@ -27,8 +29,11 @@ interface TaskItemProps {
   dropEdge?: DropEdge | null
 }
 
-export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggleSubtask, onStar, onDelete, onSetDue, onSetTimeSpent, onStopwatch, onRename, onDragStart, onDragEnd, dropEdge }: TaskItemProps) {
-  const subtaskCount = task.subtasks.length
+export function TaskItem({ task, compact, listName, onOpen, onOpenPage, onComplete, onToggleSubtask, onStar, onDelete, onSetDue, onSetTimeSpent, onStopwatch, onRename, onDragStart, onDragEnd, dropEdge }: TaskItemProps) {
+  // The page's notes stay on the page; only its subtasks show here.
+  const subtasks = subtasksOf(task)
+  const subtaskCount = subtasks.length
+  const doneCount = subtasks.filter((subtask) => subtask.completed).length
   const [editingTitle, setEditingTitle] = useState(false)
   const [draftTitle, setDraftTitle] = useState('')
   const [dragging, setDragging] = useState(false)
@@ -148,7 +153,6 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
           ) : (
             <span className="task-title" onDoubleClick={beginTitleEdit} title={onRename ? 'Double-click to edit' : undefined}>{task.title}</span>
           )}
-          {!compact && task.notes && <span className="task-notes">{task.notes}</span>}
           <span className="task-meta">
             {task.dueAt && <span className={isOverdue(task) ? 'overdue' : isToday(task.dueAt) ? 'is-due-today' : ''}><Calendar size={12} />{formatDue(task.dueAt)}</span>}
             {!task.completed && task.focusDates.length > 0 && (
@@ -161,6 +165,11 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
             {task.reminderAt && <span title="Reminder set"><Bell size={12} /></span>}
             {hasTime(task.time) && onSetTimeSpent && <TimeSpentPicker variant="meta" track={task.time} taskTitle={task.title} onChange={(minutes) => onSetTimeSpent(task.id, minutes)} onStopwatch={onStopwatch ? () => onStopwatch(task.id) : undefined} />}
             {task.recurrence !== 'none' && <span title={`Repeats ${task.recurrence}`}><Repeat2 size={12} />{task.recurrence}</span>}
+            {hasNotes(task) && (
+              onOpenPage
+                ? <button className="page-mark" onClick={(event) => { event.stopPropagation(); onOpenPage(task.id) }} aria-label={`Open the page for ${task.title}`} title="Open page"><FileText size={12} /></button>
+                : <span title="Has notes"><FileText size={12} /></span>
+            )}
             {subtaskCount > 0 && (
               <button
                 className="subtask-toggle"
@@ -169,7 +178,7 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
                 title={subtasksOpen ? 'Hide subtasks' : 'Show subtasks'}
                 onClick={(event) => { event.stopPropagation(); setSubtasksOpen((open) => !open) }}
               >
-                <ListTree size={12} />{completedSubtasks(task)}/{subtaskCount}
+                <ListTree size={12} />{doneCount}/{subtaskCount}
                 {subtasksOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
               </button>
             )}
@@ -179,7 +188,7 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
         </div>
         {subtaskCount > 0 && subtasksOpen && (
           <div className="inline-subtasks" aria-label={`Subtasks for ${task.title}`}>
-            {task.subtasks.map((subtask) => (
+            {subtasks.map((subtask) => (
               <button
                 className={`inline-subtask ${subtask.completed ? 'is-done' : ''}`}
                 key={subtask.id}
@@ -187,7 +196,7 @@ export function TaskItem({ task, compact, listName, onOpen, onComplete, onToggle
                 onClick={(event) => { event.stopPropagation(); onToggleSubtask(task.id, subtask.id) }}
               >
                 <span className="inline-subtask-check">{subtask.completed && <Check size={9} strokeWidth={3} />}</span>
-                <span>{subtask.title}</span>
+                <span>{subtask.text}</span>
               </button>
             ))}
           </div>

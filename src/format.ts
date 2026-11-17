@@ -84,10 +84,6 @@ export function timeAgo(iso: string | null, fallback = '') {
   return `${days} ${days === 1 ? 'day' : 'days'} ago`
 }
 
-export function completedSubtasks(task: Task) {
-  return task.subtasks.filter((subtask) => subtask.completed).length
-}
-
 // '45m', '2h', '1h 30m'.
 export function formatTimeSpent(minutes: number) {
   const hours = Math.floor(minutes / 60)

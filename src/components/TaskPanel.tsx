@@ -1,7 +1,7 @@
-import { Bell, CalendarClock, CalendarDays, Check, ChevronDown, Clock3, ListChecks, Play, Plus, Repeat2, Star, Tag, Timer, Trash2, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { uid } from '../data'
-import { completedSubtasks, formatDayKey } from '../format'
+import { Bell, CalendarClock, CalendarDays, Check, ChevronDown, Clock3, ListChecks, Maximize2, Play, Plus, Repeat2, Star, Tag, Timer, Trash2, X } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { formatDayKey } from '../format'
+import { PageEditor, type PageEditorHandle } from './PageEditor'
 import { isRunning } from '../time'
 import { DateTimePicker, FocusDayPicker } from './DateTimePicker'
 import { TagPicker } from './Tags'
@@ -16,11 +16,13 @@ interface TaskPanelProps {
   onDelete: () => void
   onStopwatch: () => void
   onSetTimeSpent: (seconds: number) => void
+  onOpenPage?: () => void // absent while the task's page is open behind the panel
   onClose: () => void
 }
 
-export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onStopwatch, onSetTimeSpent, onClose }: TaskPanelProps) {
-  const [newSubtask, setNewSubtask] = useState('')
+export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onStopwatch, onSetTimeSpent, onOpenPage, onClose }: TaskPanelProps) {
+  const editor = useRef<PageEditorHandle>(null)
+  const titleRef = useRef<HTMLTextAreaElement>(null)
 
   // Closing the panel (Escape, the scrim, another task) skips the title's blur, so a title left
   // empty is filled in when the panel lets go of the task.
@@ -30,13 +32,6 @@ export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onStopw
     if (!latest.current.title.trim()) latest.current.onUpdate({ title: 'Untitled task' })
   }, [task.id])
   const listColor = lists.find((list) => list.id === task.listId)?.color
-
-  const addSubtask = () => {
-    const title = newSubtask.trim()
-    if (!title) return
-    onUpdate({ subtasks: [...task.subtasks, { id: uid('subtask'), title, completed: false }] })
-    setNewSubtask('')
-  }
 
   return (
     <aside className={`task-panel ${listColor ? 'is-accented' : ''}`} style={listColor ? { '--list-accent': listColor } as React.CSSProperties : undefined} aria-label="Task details">
@@ -51,8 +46,14 @@ export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onStopw
       </div>
 
       <div className="panel-scroll">
-        <textarea className="task-title-editor" value={task.title} rows={2} maxLength={500} onChange={(event) => onUpdate({ title: event.target.value })} onBlur={(event) => onUpdate({ title: event.currentTarget.value.trim() || 'Untitled task' })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }} aria-label="Task title" />
-        <textarea className="task-notes-editor" value={task.notes} rows={4} maxLength={20_000} onChange={(event) => onUpdate({ notes: event.target.value })} placeholder="Add notes…" aria-label="Task notes" />
+        <textarea ref={titleRef} className="task-title-editor" value={task.title} rows={2} maxLength={500} onChange={(event) => onUpdate({ title: event.target.value })} onBlur={(event) => onUpdate({ title: event.currentTarget.value.trim() || 'Untitled task' })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); if (onOpenPage) editor.current?.focusStart(); else event.currentTarget.blur() } }} aria-label="Task title" />
+        {onOpenPage && <>
+          <PageEditor ref={editor} variant="panel" lines={task.page} onChange={(page) => onUpdate({ page })} placeholder="Add notes…" label="Notes and subtasks" onLeaveTop={() => titleRef.current?.focus()} />
+          <div className="panel-page-actions">
+            <button type="button" className="panel-page-action" onClick={() => editor.current?.addSubtask()}><Plus size={15} />Add subtask</button>
+            <button type="button" className="panel-page-action is-quiet" onClick={onOpenPage} title="Open the notes and subtasks as a full page"><Maximize2 size={13} />Open page</button>
+          </div>
+        </>}
 
         <div className="detail-form">
           <label className="detail-row">
@@ -99,22 +100,6 @@ export function TaskPanel({ task, lists, onUpdate, onComplete, onDelete, onStopw
             <span className="detail-input select-wrap"><select value={task.recurrence} onChange={(event) => onUpdate({ recurrence: event.target.value as Recurrence })}><option value="none">Does not repeat</option><option value="daily">Every day</option><option value="weekdays">Every weekday</option><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="yearly">Every year</option></select><ChevronDown size={14} /></span>
           </label>
         </div>
-
-        <section className="subtasks-section">
-          <div className="panel-section-title"><span>Subtasks</span><small>{completedSubtasks(task)}/{task.subtasks.length}</small></div>
-          <div className="subtask-list">
-            {task.subtasks.map((subtask) => (
-              <div className={`subtask ${subtask.completed ? 'done' : ''}`} key={subtask.id}>
-                <button onClick={() => onUpdate({ subtasks: task.subtasks.map((item) => item.id === subtask.id ? { ...item, completed: !item.completed } : item) })} aria-label={subtask.completed ? `Mark ${subtask.title} incomplete` : `Complete ${subtask.title}`}><span>{subtask.completed && <Check size={11} strokeWidth={3} />}</span></button>
-                <input value={subtask.title} aria-label="Subtask title" onChange={(event) => onUpdate({ subtasks: task.subtasks.map((item) => item.id === subtask.id ? { ...item, title: event.target.value } : item) })} onBlur={(event) => { if (!event.currentTarget.value.trim()) onUpdate({ subtasks: task.subtasks.filter((item) => item.id !== subtask.id) }) }} />
-                <button className="subtask-delete" onClick={() => onUpdate({ subtasks: task.subtasks.filter((item) => item.id !== subtask.id) })} aria-label={`Delete ${subtask.title}`}><X size={13} /></button>
-              </div>
-            ))}
-          </div>
-          <form className="new-subtask" onSubmit={(event) => { event.preventDefault(); addSubtask() }}>
-            <Plus size={15} /><input value={newSubtask} onChange={(event) => setNewSubtask(event.target.value)} placeholder="Add a subtask" aria-label="Add a subtask" />
-          </form>
-        </section>
 
         <div className="task-facts"><Clock3 size={13} />Created {new Date(task.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</div>
       </div>

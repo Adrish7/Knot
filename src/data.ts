@@ -1,7 +1,7 @@
 import { dateKey, dayKeyOf, todayDate, todayKey } from './format'
 import { emptySanctuary, normalizeSanctuary } from './sanctuary'
 import { emptyTrack, isRunning, pauseTrack, runningSince } from './time'
-import type { DeletedTask, FocusStatus, KnotData, Preferences, Recurrence, SortMode, Subtask, Tag, Task, TaskList, ThemeMode, TimeSession, TimeTrack } from './types'
+import type { DeletedTask, FocusStatus, KnotData, PageLine, Preferences, Recurrence, SortMode, Tag, Task, TaskList, ThemeMode, TimeSession, TimeTrack } from './types'
 
 export const TRASH_RETENTION_DAYS = 30
 
@@ -93,7 +93,7 @@ export function createTask(listId: string | null, title: string, sortOrder: numb
     id: uid('task'),
     listId,
     title: title.trim(),
-    notes: '',
+    page: [],
     dueAt: null,
     focusDates: [],
     focusStatus: {},
@@ -107,7 +107,6 @@ export function createTask(listId: string | null, title: string, sortOrder: numb
     completedAt: null,
     createdAt: new Date().toISOString(),
     sortOrder,
-    subtasks: [],
     tagIds: [],
     time: emptyTrack(),
   }
@@ -132,20 +131,20 @@ export function createSeedData(): KnotData {
     ],
     tasks: [
       make(focusId, 'Shape the week', 0, {
-        notes: 'Choose the three outcomes that would make this week feel complete.',
+        page: [
+          { id: uid('line'), kind: 'text', text: 'Choose the three outcomes that would make this week feel complete.' },
+          { id: uid('line'), kind: 'subtask', text: 'Review calendar', completed: true },
+          { id: uid('line'), kind: 'subtask', text: 'Choose top three outcomes', completed: false },
+        ],
         dueAt: isoDate(0, 18),
         focusDates: [dayKey(0)],
         starred: true,
-        subtasks: [
-          { id: uid('subtask'), title: 'Review calendar', completed: true },
-          { id: uid('subtask'), title: 'Choose top three outcomes', completed: false },
-        ],
       }),
       make(focusId, 'Send the project update', 1, { dueAt: isoDate(1, 16, 30), focusDates: [dayKey(0), dayKey(1)] }),
       make(focusId, 'Friday weekly review', 2, { dueAt: isoDate(3, 17), recurrence: 'weekly' }),
       make(personalId, 'Book a table for Saturday', 0, { dueAt: isoDate(2, 19) }),
       make(personalId, 'Water the plants', 1, { recurrence: 'weekly' }),
-      make(somedayId, 'Plan a screen-free Sunday', 0, { notes: 'Walk, a good lunch, and the book on the nightstand.' }),
+      make(somedayId, 'Plan a screen-free Sunday', 0, { page: [{ id: uid('line'), kind: 'text', text: 'Walk, a good lunch, and the book on the nightstand.' }] }),
       make(somedayId, 'Learn to make fresh pasta', 1),
     ],
     tags: createDefaultTags(),
@@ -283,7 +282,7 @@ function normalizeTask(candidate: Record<string, unknown>, listId: string | null
     id: candidate.id as string,
     listId,
     title: cleanText(candidate.title) || 'Untitled task',
-    notes: typeof candidate.notes === 'string' ? candidate.notes : '',
+    page: normalizePage(candidate.page, candidate.notes, candidate.subtasks),
     dueAt: nullableIso(candidate.dueAt),
     focusDates,
     focusStatus: normalizeFocusStatus(candidate.focusStatus, focusDates),
@@ -297,7 +296,6 @@ function normalizeTask(candidate: Record<string, unknown>, listId: string | null
     completedAt: completed ? nullableIso(candidate.completedAt) : null,
     createdAt: validIso(candidate.createdAt) || now,
     sortOrder: finiteNumber(candidate.sortOrder, index),
-    subtasks: normalizeSubtasks(candidate.subtasks),
     tagIds: Array.isArray(candidate.tagIds) ? [...new Set(candidate.tagIds.filter((id): id is string => typeof id === 'string' && tagIds.has(id)))] : [],
     time: normalizeTrack(candidate.time, candidate.timeSpentMinutes, legacyTimeDay(focusDates, candidate, now)),
   }
@@ -373,14 +371,34 @@ function normalizeTrack(value: unknown, legacyMinutes: unknown, legacyDay: strin
   return track
 }
 
-function normalizeSubtasks(value: unknown): Subtask[] {
-  if (!Array.isArray(value)) return []
+// A page is lines of text and subtasks. Data saved before pages existed had plain notes and a
+// separate subtask list; the notes become the page's first lines and the subtasks follow them.
+// A line never holds a line break: one that does is split into lines (a subtask's is joined up).
+function normalizePage(value: unknown, legacyNotes: unknown, legacySubtasks: unknown): PageLine[] {
   const ids = new Set<string>()
-  return value.flatMap((candidate): Subtask[] => {
-    if (!isRecord(candidate) || typeof candidate.id !== 'string' || !candidate.id.trim() || ids.has(candidate.id)) return []
-    ids.add(candidate.id)
-    return [{ id: candidate.id, title: cleanText(candidate.title) || 'Untitled subtask', completed: Boolean(candidate.completed) }]
-  })
+  const freshId = (candidate: unknown) => {
+    const id = typeof candidate === 'string' && candidate.trim() && !ids.has(candidate) ? candidate : uid('line')
+    ids.add(id)
+    return id
+  }
+  const textLines = (text: string, id?: unknown): PageLine[] => text.split(/\r\n|\r|\n/).map((part, index) => ({ id: freshId(index === 0 ? id : undefined), kind: 'text', text: part }))
+  const oneLine = (text: string) => text.replace(/\s*(?:\r\n|\r|\n)\s*/g, ' ')
+
+  if (Array.isArray(value)) {
+    return value.flatMap((candidate): PageLine[] => {
+      if (!isRecord(candidate) || typeof candidate.text !== 'string') return []
+      if (candidate.kind === 'subtask') return [{ id: freshId(candidate.id), kind: 'subtask', text: oneLine(candidate.text), completed: Boolean(candidate.completed) }]
+      if (candidate.kind === 'text') return textLines(candidate.text, candidate.id)
+      return []
+    })
+  }
+
+  const page: PageLine[] = typeof legacyNotes === 'string' && legacyNotes.trim() ? textLines(legacyNotes.replace(/\s+$/, '')) : []
+  for (const candidate of Array.isArray(legacySubtasks) ? legacySubtasks : []) {
+    if (!isRecord(candidate)) continue
+    page.push({ id: freshId(candidate.id), kind: 'subtask', text: oneLine(cleanText(candidate.title)) || 'Untitled subtask', completed: Boolean(candidate.completed) })
+  }
+  return page
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
