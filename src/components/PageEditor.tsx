@@ -1,4 +1,4 @@
-import { Check, X } from 'lucide-react'
+import { Check, GripVertical, X } from 'lucide-react'
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { subtaskLine, textLine } from '../page'
 import type { PageLine } from '../types'
@@ -13,6 +13,7 @@ import type { PageLine } from '../types'
 //   ⇧⌘L                  turns the line into a subtask, or back into text
 //   ⌘Return              ticks or unticks the subtask
 //   ⌘Z, ⇧⌘Z              undo and redo, across lines
+//   the grip             beside a line on hover, drags it (and its tick) to another place
 
 export interface PageEditorHandle {
   focusStart: () => void
@@ -33,7 +34,7 @@ interface PageEditorProps {
   ref?: React.Ref<PageEditorHandle>
 }
 
-type Caret = { id: string; offset: number }
+type Caret = { id: string; offset: number; scroll?: boolean }
 type Snapshot = { lines: PageLine[]; caret: Caret | null }
 
 const CHECKLIST_PREFIX = /^(?:[-*] )?\[([ xX]?)\] /
@@ -149,7 +150,7 @@ export function PageEditor({ lines, onChange, variant, placeholder, hint, label,
     if (!element) return
     element.focus({ preventScroll: true })
     placeCaret(element, Math.min(caret.offset, readText(element).length))
-    element.scrollIntoView({ block: 'nearest' })
+    if (caret.scroll !== false) element.scrollIntoView({ block: 'nearest' })
   })
 
   const activeKind = view.find((line) => line.id === activeId)?.kind ?? null
@@ -466,6 +467,105 @@ export function PageEditor({ lines, onChange, variant, placeholder, hint, label,
     return () => root.removeEventListener('beforeinput', onBeforeInput)
   }, [])
 
+  // Dragging a line by its grip. The pointer is captured by the grip, the line stays where it is
+  // (dimmed) while an accent rule shows where it will land, and the page scrolls when the pointer
+  // nears its top or bottom edge. Dropping moves it as one undo step; Escape cancels.
+  const [drag, setDrag] = useState<{ id: string; drop: number } | null>(null)
+  const dragging = useRef<{ id: string; startY: number; y: number; moved: boolean; drop: number; caret: Caret | null; frame: number; onKey?: (event: KeyboardEvent) => void } | null>(null)
+  const viewRef = useRef(view)
+  useLayoutEffect(() => { viewRef.current = view })
+
+  // Where a line dropped at `y` lands: before the first line whose middle is below it.
+  const dropAt = (y: number) => {
+    const rows = [...(rootRef.current?.children ?? [])] as HTMLElement[]
+    const index = rows.findIndex((row) => { const bounds = row.getBoundingClientRect(); return y < bounds.top + bounds.height / 2 })
+    return index < 0 ? rows.length : index
+  }
+  const followPointer = () => {
+    const state = dragging.current
+    if (!state) return
+    const drop = dropAt(state.y)
+    if (drop !== state.drop) {
+      state.drop = drop
+      setDrag({ id: state.id, drop })
+    }
+  }
+  const scrollWhileDragging = () => {
+    const state = dragging.current
+    if (!state) return
+    const scroller = rootRef.current?.closest<HTMLElement>('.focus-scroll, .panel-scroll')
+    if (scroller) {
+      const bounds = scroller.getBoundingClientRect()
+      const edge = 56
+      const step = state.y < bounds.top + edge ? -(bounds.top + edge - state.y) : state.y > bounds.bottom - edge ? state.y - (bounds.bottom - edge) : 0
+      if (step !== 0) {
+        scroller.scrollTop += Math.max(-18, Math.min(18, Math.round(step / 3)))
+        followPointer()
+      }
+    }
+    state.frame = requestAnimationFrame(scrollWhileDragging)
+  }
+  const endDrag = (apply: boolean) => {
+    const state = dragging.current
+    if (!state) return
+    dragging.current = null
+    cancelAnimationFrame(state.frame)
+    if (state.onKey) window.removeEventListener('keydown', state.onKey, true)
+    setDrag(null)
+    if (!apply || !state.moved) return
+    const lines = viewRef.current
+    const from = lines.findIndex((line) => line.id === state.id)
+    const to = state.drop > from ? state.drop - 1 : state.drop
+    if (from < 0 || to === from) return
+    const next = [...lines]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    // Moving a line can take the caret's line out of the document for a moment; put it back
+    // without scrolling to it. With no caret anywhere, the moved line takes it, so ⌘Z undoes.
+    const caret = state.caret ?? { id: moved.id, offset: moved.text.length }
+    commit(next, { ...caret, scroll: false }, 'edit', state.caret)
+  }
+  const endDragRef = useRef(endDrag)
+  useLayoutEffect(() => { endDragRef.current = endDrag })
+  useEffect(() => () => {
+    const state = dragging.current
+    if (!state) return
+    cancelAnimationFrame(state.frame)
+    if (state.onKey) window.removeEventListener('keydown', state.onKey, true)
+  }, [])
+
+  const gripHandlers = (id: string) => ({
+    onMouseDown: (event: React.MouseEvent) => event.preventDefault(),
+    onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0 || dragging.current) return
+      event.preventDefault()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      dragging.current = { id, startY: event.clientY, y: event.clientY, moved: false, drop: indexOf(id), caret: currentCaret(), frame: 0 }
+    },
+    onPointerMove: (event: React.PointerEvent) => {
+      const state = dragging.current
+      if (!state) return
+      state.y = event.clientY
+      if (!state.moved) {
+        if (Math.abs(event.clientY - state.startY) < 4) return
+        state.moved = true
+        state.drop = -1
+        state.onKey = (key) => {
+          if (key.key !== 'Escape') return
+          key.preventDefault()
+          key.stopPropagation()
+          endDragRef.current(false)
+        }
+        window.addEventListener('keydown', state.onKey, true)
+        state.frame = requestAnimationFrame(scrollWhileDragging)
+      }
+      followPointer()
+    },
+    onPointerUp: () => endDrag(true),
+    onPointerCancel: () => endDrag(false),
+    onLostPointerCapture: () => endDrag(true),
+  })
+
   // A press beside a line (or below the last one) writes in that line, at the nearest point.
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
@@ -484,7 +584,7 @@ export function PageEditor({ lines, onChange, variant, placeholder, hint, label,
   return (
     <div
       ref={rootRef}
-      className={`page-editor is-${variant}`}
+      className={`page-editor is-${variant} ${drag ? 'is-dragging' : ''}`}
       role="group"
       aria-label={label}
       onInput={handleInput}
@@ -494,11 +594,19 @@ export function PageEditor({ lines, onChange, variant, placeholder, hint, label,
       onFocus={(event) => { const id = (event.target as HTMLElement).dataset.lineId; if (id) setActiveId(id) }}
       onBlur={(event) => { if ((event.target as HTMLElement).dataset.lineId) setActiveId(null) }}
     >
-      {view.map((line) => {
+      {view.map((line, index) => {
         const done = line.kind === 'subtask' && line.completed
+        const from = drag ? indexOf(drag.id) : -1
+        const landsHere = drag !== null && drag.drop !== from && drag.drop !== from + 1
+        const dropClass = landsHere && drag.drop === index ? 'is-drop-before' : landsHere && drag.drop === view.length && index === view.length - 1 ? 'is-drop-after' : ''
         const shownPlaceholder = isEmpty ? placeholder : hint && line.kind === 'text' && line.text === '' && activeId === line.id ? hint : null
         return (
-          <div className={`page-line is-${line.kind} ${done ? 'is-done' : ''}`} key={line.id} data-row-id={line.id}>
+          <div className={`page-line is-${line.kind} ${done ? 'is-done' : ''} ${drag?.id === line.id ? 'is-dragging' : ''} ${dropClass}`} key={line.id} data-row-id={line.id}>
+            {view.length > 1 && (
+              <button type="button" className="page-line-grip" tabIndex={-1} aria-label="Drag to move" title="Drag to move" {...gripHandlers(line.id)}>
+                <GripVertical size={14} />
+              </button>
+            )}
             {line.kind === 'subtask' && (
               <button
                 type="button"

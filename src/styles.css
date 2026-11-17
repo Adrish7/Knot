@@ -494,6 +494,20 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .page-line-remove { display: grid; place-items: center; flex: 0 0 auto; width: 22px; height: var(--line-h); border-radius: 4px; color: var(--text-3); opacity: 0; transition: opacity 120ms ease, color 120ms ease; }
 .page-line:hover .page-line-remove { opacity: 1; }
 .page-line-remove:hover { color: var(--danger); }
+/* The grip sits in the gutter left of a line and shows on hover; dragging dims the line and an
+   accent rule marks where it lands. */
+.page-line-grip { position: absolute; top: 0; left: -21px; display: grid; place-items: center; width: 16px; height: var(--line-h); border-radius: 4px; color: var(--text-3); opacity: 0; cursor: grab; touch-action: none; user-select: none; transition: opacity 120ms ease, background 120ms ease, color 120ms ease; }
+.page-line.is-subtask .page-line-grip { top: 2px; }
+.is-panel .page-line-grip { left: -19px; }
+.page-line:hover .page-line-grip { opacity: 1; }
+.page-line-grip:hover { color: var(--text-2); background: var(--surface-2); }
+.page-editor.is-dragging, .page-editor.is-dragging .page-line-grip { cursor: grabbing; }
+.page-editor.is-dragging .page-line:not(.is-dragging) .page-line-grip, .page-editor.is-dragging .page-line-remove { opacity: 0; }
+.page-line.is-dragging { opacity: 0.35; }
+.page-line.is-dragging .page-line-grip { opacity: 1; color: var(--text-2); }
+.page-line.is-drop-before::before, .page-line.is-drop-after::after { content: ''; position: absolute; z-index: 2; left: 0; right: 0; height: 2px; border-radius: 99px; background: var(--accent); pointer-events: none; }
+.page-line.is-drop-before::before { top: -1px; }
+.page-line.is-drop-after::after { bottom: -1px; }
 .is-page .page-check { width: 20px; }
 .is-page .page-check > span { width: 16px; height: 16px; border-radius: 4.5px; }
 
@@ -832,7 +846,7 @@ button.cal-day-time-row:hover { background: var(--surface-2); }
   /* A task row keeps star and delete on hover; its date and time are in its panel. */
   .task-item { padding-right: 62px; }
   .task-actions :is(.task-date-button, .task-time-button) { display: none; }
-  .task-page-sheet { padding: 8px 16px 120px; }
+  .task-page-sheet { padding: 8px 16px 120px 24px; }
   .task-page-title { font-size: 22px; line-height: 30px; }
   .task-page-check { height: 30px; }
   .task-page-meta, .task-page-sheet > .page-editor { margin-left: 0; }

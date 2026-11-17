@@ -6,9 +6,9 @@ Knot is a calm, native-feeling task manager for macOS. Lists, a Today view, a ca
 
 ## Download
 
-**[Download Knot 1.8.0 for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/latest/download/Knot-mac-arm64.dmg)**
+**[Download Knot 1.8.1 for Mac (Apple Silicon)](https://github.com/Adrish7/Knot/releases/latest/download/Knot-mac-arm64.dmg)**
 
-Latest version: **1.8.0**, released November 17, 2026 ([what's new](https://github.com/Adrish7/Knot/releases/tag/v1.8.0), [all releases](https://github.com/Adrish7/Knot/releases)). The link always downloads the newest release.
+Latest version: **1.8.1**, released November 17, 2026 ([what's new](https://github.com/Adrish7/Knot/releases/tag/v1.8.1), [all releases](https://github.com/Adrish7/Knot/releases)). The link always downloads the newest release.
 
 Requirements: an Apple Silicon Mac (M1 or later) running macOS 12 or newer. Intel Macs are not supported.
 
@@ -46,7 +46,7 @@ Your tasks are kept either way. They live in your Application Support folder, no
 
 - Lists with a colour each, and an All tasks board showing every list side by side
 - Today, Calendar, Starred, Completed, and Recently deleted views
-- A page for every task, written like a note: text and subtasks line by line, in the task's panel or opened as a full page. Type `[]` and a space (or press `⇧⌘L`) to make a line a subtask. The subtasks show under the task in every list, and the notes stay on the page
+- A page for every task, written like a note: text and subtasks line by line, in the task's panel or opened as a full page. Type `[]` and a space (or press `⇧⌘L`) to make a line a subtask, and drag any line by the grip at its left to move it. The subtasks show under the task in every list, and the notes stay on the page
 - Due date and time, reminders, recurrence, and time spent
 - A stopwatch for any task, plus an open stopwatch, with a day timeline of your sessions and per-day totals in the calendar
 - A full-screen stopwatch that shows only the timer, filling the screen: click **Full screen** on the Stopwatch page or press F. Space starts and pauses, Esc leaves
